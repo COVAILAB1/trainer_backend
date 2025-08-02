@@ -1,10 +1,11 @@
+
 const express = require('express');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000; // Use environment port
 const secretKey = 'tamil';
 
 app.use(cors());
@@ -32,7 +33,7 @@ const destinationSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   latitude: { type: Number, required: true },
   longitude: { type: Number, required: true },
-  date: { type: String, required: true }, // Format: YYYY-MM-DD
+  date: { type: String, required: true },
   assignedAt: { type: Date, default: Date.now },
 });
 destinationSchema.index({ userId: 1, date: 1 }, { unique: true });
@@ -55,8 +56,8 @@ const historySchema = new mongoose.Schema({
   distance: { type: Number, required: true },
   timeTaken: { type: String, required: true },
   path: [{ latitude: Number, longitude: Number }],
-  startLatitude: { type: Number }, // New field for start location
-  startLongitude: { type: Number }, // New field for start location
+  startLatitude: { type: Number },
+  startLongitude: { type: Number },
 });
 const History = mongoose.model('History', historySchema);
 
@@ -73,10 +74,16 @@ const verifyToken = (req, res, next) => {
   });
 };
 
+// Log all incoming requests for debugging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 // Login endpoint
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  console.log(req.body);
+  console.log('Login request:', req.body);
   try {
     const user = await User.findOne({ username });
     if (!user || !await bcrypt.compare(password, user.password)) {
@@ -107,6 +114,7 @@ app.post('/users', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
   try {
     const { username, password, name, email, number } = req.body;
+    console.log('Add user request:', req.body); // Debug log
     if (!username || !password || !name || !email || !number) {
       return res.status(400).json({ message: 'All fields are required' });
     }
@@ -308,16 +316,11 @@ app.post('/location', verifyToken, async (req, res) => {
     if (!userId || !latitude || !longitude) {
       return res.status(400).json({ message: 'userId, latitude, and longitude are required' });
     }
-    // Validate user exists
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
-    // Delete all existing location entries for the user
     await Location.deleteMany({ userId });
-
-    // Save new location
     const location = new Location({
       userId,
       latitude,
@@ -326,12 +329,8 @@ app.post('/location', verifyToken, async (req, res) => {
       timestamp: timestamp ? new Date(timestamp) : Date.now(),
     });
     await location.save();
-
-    // Fetch locations for the user on the same date
     const date = new Date(timestamp || Date.now()).toISOString().split('T')[0];
     const locations = await Location.find({ userId, timestamp: { $gte: new Date(date) } }).sort({ timestamp: 1 });
-
-    // Prepare history data
     let path = locations.map(loc => ({ latitude: loc.latitude, longitude: loc.longitude }));
     const historyData = {
       userId,
@@ -340,27 +339,20 @@ app.post('/location', verifyToken, async (req, res) => {
       timeTaken: '0.00 minutes',
       path,
     };
-
-    // Include start location in history if provided
     if (isStartLocation && startLatitude != null && startLongitude != null) {
       historyData.startLatitude = startLatitude;
       historyData.startLongitude = startLongitude;
       historyData.path = [{ latitude: startLatitude, longitude: startLongitude }, ...path];
     }
-
-    // Calculate distance and time taken
     if (historyData.path.length > 1) {
       historyData.distance = calculateDistance(historyData.path);
       historyData.timeTaken = calculateTimeTaken(locations);
     }
-
-    // Save or update history for the date
     await History.findOneAndUpdate(
       { userId, date },
       historyData,
       { upsert: true, new: true }
     );
-
     res.status(201).json({ message: 'Location saved' });
   } catch (err) {
     console.error('Send location error:', err);
@@ -376,18 +368,16 @@ function calculateDistance(locations) {
     const lon1 = locations[i - 1].longitude;
     const lat2 = locations[i].latitude;
     const lon2 = locations[i].longitude;
-
-    const R = 6371e3; // Earth radius in meters
+    const R = 6371e3;
     const φ1 = lat1 * Math.PI / 180;
     const φ2 = lat2 * Math.PI / 180;
     const Δφ = (lat2 - lat1) * Math.PI / 180;
     const Δλ = (lon2 - lon1) * Math.PI / 180;
-
     const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
               Math.cos(φ1) * Math.cos(φ2) *
               Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    totalDistance += R * c / 1000; // Convert to kilometers
+    totalDistance += R * c / 1000;
   }
   return Number(totalDistance.toFixed(2));
 }
@@ -397,10 +387,11 @@ function calculateTimeTaken(locations) {
   if (locations.length < 2) return '0.00 minutes';
   const start = new Date(locations[0].timestamp);
   const end = new Date(locations[locations.length - 1].timestamp);
-  const diff = (end - start) / 1000 / 60; // Convert to minutes
+  const diff = (end - start) / 1000 / 60;
   return `${diff.toFixed(2)} minutes`;
 }
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+

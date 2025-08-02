@@ -1,0 +1,405 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const cors = require('cors');
+const app = express();
+const port = 3000;
+const secretKey = 'tamil';
+
+app.use(cors());
+app.use(express.json());
+
+// MongoDB connection
+mongoose.connect('mongodb://localhost:27017/trainer_track2', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+}).then(() => console.log('Connected to MongoDB')).catch(err => console.error('MongoDB connection error:', err));
+
+// User Schema
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  number: { type: String, required: true, unique: true },
+  isAdmin: { type: Boolean, default: false },
+});
+const User = mongoose.model('User', userSchema);
+
+// Destination Schema
+const destinationSchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  latitude: { type: Number, required: true },
+  longitude: { type: Number, required: true },
+  date: { type: String, required: true }, // Format: YYYY-MM-DD
+  assignedAt: { type: Date, default: Date.now },
+});
+destinationSchema.index({ userId: 1, date: 1 }, { unique: true });
+const Destination = mongoose.model('Destination', destinationSchema);
+
+// Location Schema
+const locationSchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  latitude: { type: Number, required: true },
+  longitude: { type: Number, required: true },
+  speed: { type: Number, default: 0.0 },
+  timestamp: { type: Date, default: Date.now },
+});
+const Location = mongoose.model('Location', locationSchema);
+
+// History Schema
+const historySchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  date: { type: String, required: true },
+  distance: { type: Number, required: true },
+  timeTaken: { type: String, required: true },
+  path: [{ latitude: Number, longitude: Number }],
+  startLatitude: { type: Number }, // New field for start location
+  startLongitude: { type: Number }, // New field for start location
+});
+const History = mongoose.model('History', historySchema);
+
+// Middleware to verify JWT
+const verifyToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'No token provided' });
+
+  jwt.verify(token, secretKey, (err, decoded) => {
+    if (err) return res.status(401).json({ message: 'Invalid token' });
+    req.userId = decoded.userId;
+    req.isAdmin = decoded.isAdmin;
+    next();
+  });
+};
+
+// Login endpoint
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const user = await User.findOne({ username });
+    if (!user || !await bcrypt.compare(password, user.password)) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+    const token = jwt.sign({ userId: user._id, isAdmin: user.isAdmin }, secretKey, { expiresIn: '1h' });
+    res.json({ userId: user._id, token, isAdmin: user.isAdmin });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get all users (admin only)
+app.get('/users', verifyToken, async (req, res) => {
+  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  try {
+    const users = await User.find({}, '-password');
+    res.json(users);
+  } catch (err) {
+    console.error('Get users error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Add user (admin only)
+app.post('/users', verifyToken, async (req, res) => {
+  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  try {
+    const { username, password, name, email, number } = req.body;
+    if (!username || !password || !name || !email || !number) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+    const existingUser = await User.findOne({ $or: [{ username }, { email }, { number }] });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Username, email, or number already exists' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({ username, password: hashedPassword, name, email, number });
+    await user.save();
+    res.status(201).json({ message: 'User created' });
+  } catch (err) {
+    console.error('Add user error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Update user (admin only)
+app.put('/users/:userId', verifyToken, async (req, res) => {
+  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  try {
+    const { username, password, name, email, number } = req.body;
+    const updateData = { username, name, email, number };
+    if (password) updateData.password = await bcrypt.hash(password, 10);
+    const existingUser = await User.findOne({
+      $or: [{ username }, { email }, { number }],
+      _id: { $ne: req.params.userId },
+    });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Username, email, or number already exists' });
+    }
+    const updatedUser = await User.findByIdAndUpdate(req.params.userId, updateData, { new: true });
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json({ message: 'User updated' });
+  } catch (err) {
+    console.error('Update user error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Delete user (admin only)
+app.delete('/users/:userId', verifyToken, async (req, res) => {
+  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  try {
+    const user = await User.findByIdAndDelete(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    await Destination.deleteMany({ userId: req.params.userId });
+    await Location.deleteMany({ userId: req.params.userId });
+    await History.deleteMany({ userId: req.params.userId });
+    res.json({ message: 'User and associated data deleted' });
+  } catch (err) {
+    console.error('Delete user error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Assign destination (admin only)
+app.post('/destination', verifyToken, async (req, res) => {
+  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  try {
+    const { userId, latitude, longitude, date } = req.body;
+    if (!userId || !latitude || !longitude || !date) {
+      return res.status(400).json({ message: 'userId, latitude, longitude, and date are required' });
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD' });
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    await Destination.findOneAndDelete({ userId, date });
+    const destination = new Destination({ userId, latitude, longitude, date });
+    await destination.save();
+    res.status(201).json({ message: 'Destination assigned' });
+  } catch (err) {
+    console.error('Assign destination error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get user destination
+app.get('/destination/:userId', verifyToken, async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const destination = await Destination.findOne({ userId: req.params.userId, date: today });
+    if (!destination) return res.status(404).json({ message: 'No destination found for today' });
+    res.json({ userId: destination.userId, latitude: destination.latitude, longitude: destination.longitude, date: destination.date });
+  } catch (err) {
+    console.error('Get destination error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Delete destination (admin only)
+app.delete('/destination/:userId', verifyToken, async (req, res) => {
+  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const destination = await Destination.findOneAndDelete({ userId: req.params.userId, date: today });
+    if (!destination) {
+      return res.status(404).json({ message: 'No destination found for today' });
+    }
+    res.json({ message: 'Destination deleted' });
+  } catch (err) {
+    console.error('Delete destination error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get today's destinations (admin only)
+app.get('/destinations/today', verifyToken, async (req, res) => {
+  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  try {
+    const { date } = req.query;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ message: 'Valid date parameter (YYYY-MM-DD) is required' });
+    }
+    const destinations = await Destination.find({ date });
+    res.json(destinations.map(dest => ({
+      userId: dest.userId,
+      latitude: dest.latitude,
+      longitude: dest.longitude,
+      date: dest.date,
+    })));
+  } catch (err) {
+    console.error('Get today\'s destinations error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get user tracking data
+app.get('/tracking/:userId', verifyToken, async (req, res) => {
+  try {
+    const locations = await Location.find({ userId: req.params.userId }).sort({ timestamp: -1 }).limit(1);
+    if (!locations.length) return res.status(404).json({ message: 'No tracking data found' });
+    res.json({
+      userId: locations[0].userId,
+      latitude: locations[0].latitude,
+      longitude: locations[0].longitude,
+      speed: locations[0].speed ?? 0.0,
+      timestamp: locations[0].timestamp,
+    });
+  } catch (err) {
+    console.error('Get tracking data error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get all user locations (admin only)
+app.get('/locations', verifyToken, async (req, res) => {
+  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  try {
+    const locations = await Location.aggregate([
+      { $sort: { userId: 1, timestamp: -1 } },
+      {
+        $group: {
+          _id: '$userId',
+          userId: { $first: '$userId' },
+          latitude: { $first: '$latitude' },
+          longitude: { $first: '$longitude' },
+          speed: { $first: '$speed' },
+          timestamp: { $first: '$timestamp' },
+        },
+      },
+    ]);
+    res.json(locations.map(loc => ({
+      userId: loc.userId,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      speed: loc.speed ?? 0.0,
+      timestamp: loc.timestamp,
+    })));
+  } catch (err) {
+    console.error('Get locations error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get user history
+app.get('/history/:userId', verifyToken, async (req, res) => {
+  try {
+    const history = await History.find({ userId: req.params.userId }).sort({ date: -1 });
+    res.json(history);
+  } catch (err) {
+    console.error('Get history error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Send location data
+app.post('/location', verifyToken, async (req, res) => {
+  try {
+    const { userId, latitude, longitude, speed, timestamp, startLatitude, startLongitude, isStartLocation } = req.body;
+    if (!userId || !latitude || !longitude) {
+      return res.status(400).json({ message: 'userId, latitude, and longitude are required' });
+    }
+    // Validate user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Delete all existing location entries for the user
+    await Location.deleteMany({ userId });
+
+    // Save new location
+    const location = new Location({
+      userId,
+      latitude,
+      longitude,
+      speed: speed ?? 0.0,
+      timestamp: timestamp ? new Date(timestamp) : Date.now(),
+    });
+    await location.save();
+
+    // Fetch locations for the user on the same date
+    const date = new Date(timestamp || Date.now()).toISOString().split('T')[0];
+    const locations = await Location.find({ userId, timestamp: { $gte: new Date(date) } }).sort({ timestamp: 1 });
+
+    // Prepare history data
+    let path = locations.map(loc => ({ latitude: loc.latitude, longitude: loc.longitude }));
+    const historyData = {
+      userId,
+      date,
+      distance: 0,
+      timeTaken: '0.00 minutes',
+      path,
+    };
+
+    // Include start location in history if provided
+    if (isStartLocation && startLatitude != null && startLongitude != null) {
+      historyData.startLatitude = startLatitude;
+      historyData.startLongitude = startLongitude;
+      historyData.path = [{ latitude: startLatitude, longitude: startLongitude }, ...path];
+    }
+
+    // Calculate distance and time taken
+    if (historyData.path.length > 1) {
+      historyData.distance = calculateDistance(historyData.path);
+      historyData.timeTaken = calculateTimeTaken(locations);
+    }
+
+    // Save or update history for the date
+    await History.findOneAndUpdate(
+      { userId, date },
+      historyData,
+      { upsert: true, new: true }
+    );
+
+    res.status(201).json({ message: 'Location saved' });
+  } catch (err) {
+    console.error('Send location error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Helper function to calculate distance (Haversine formula)
+function calculateDistance(locations) {
+  let totalDistance = 0;
+  for (let i = 1; i < locations.length; i++) {
+    const lat1 = locations[i - 1].latitude;
+    const lon1 = locations[i - 1].longitude;
+    const lat2 = locations[i].latitude;
+    const lon2 = locations[i].longitude;
+
+    const R = 6371e3; // Earth radius in meters
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    totalDistance += R * c / 1000; // Convert to kilometers
+  }
+  return Number(totalDistance.toFixed(2));
+}
+
+// Helper function to calculate time taken
+function calculateTimeTaken(locations) {
+  if (locations.length < 2) return '0.00 minutes';
+  const start = new Date(locations[0].timestamp);
+  const end = new Date(locations[locations.length - 1].timestamp);
+  const diff = (end - start) / 1000 / 60; // Convert to minutes
+  return `${diff.toFixed(2)} minutes`;
+}
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});

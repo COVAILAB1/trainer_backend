@@ -76,6 +76,7 @@ const verifyToken = (req, res, next) => {
 // Login endpoint
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
+  console.log(req.body);
   try {
     const user = await User.findOne({ username });
     if (!user || !await bcrypt.compare(password, user.password)) {

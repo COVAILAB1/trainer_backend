@@ -293,6 +293,7 @@ app.get('/tracking/:userId', verifyToken, async (req, res) => {
     const locations = await Location.find({ userId: req.params.userId }).sort({ timestamp: -1 }).limit(1);
     if (!locations.length) return res.status(404).json({ message: 'No tracking data found' });
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    console.log('Tracking data:', locations)
     res.json({
       userId: locations[0].userId,
       latitude: locations[0].latitude,
@@ -357,6 +358,7 @@ app.get('/history/:userId', verifyToken, async (req, res) => {
 app.post('/location', verifyToken, async (req, res) => {
   try {
     const { userId, latitude, longitude, speed, timestamp, startLatitude, startLongitude, isStartLocation, appStatus } = req.body;
+    console.log('Send location request:', req.body);
     if (!userId || !latitude || !longitude) {
       return res.status(400).json({ message: 'userId, latitude, and longitude are required' });
     }
@@ -370,7 +372,7 @@ app.post('/location', verifyToken, async (req, res) => {
       latitude,
       longitude,
       speed: speed ?? 0.0,
-      appStatus: appStatus ?? 'foreground',
+      appStatus: appStatus ,
       timestamp: timestamp ? new Date(timestamp) : Date.now(),
     });
     await location.save();

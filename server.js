@@ -1,12 +1,11 @@
-
 const express = require('express');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const app = express();
-const port = process.env.PORT || 3000; // Use environment port
-const secretKey = 'tamil';
+const port = process.env.PORT || 3000;
+const secretKey = process.env.JWT_SECRET || 'tamil'; // Use environment variable for security
 
 app.use(cors());
 app.use(express.json());
@@ -45,6 +44,7 @@ const locationSchema = new mongoose.Schema({
   latitude: { type: Number, required: true },
   longitude: { type: Number, required: true },
   speed: { type: Number, default: 0.0 },
+  appStatus: { type: String, enum: ['foreground', 'background'], default: 'foreground' }, // New field
   timestamp: { type: Date, default: Date.now },
 });
 const Location = mongoose.model('Location', locationSchema);
@@ -65,7 +65,6 @@ const History = mongoose.model('History', historySchema);
 const verifyToken = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'No token provided' });
-
   jwt.verify(token, secretKey, (err, decoded) => {
     if (err) return res.status(401).json({ message: 'Invalid token' });
     req.userId = decoded.userId;
@@ -109,12 +108,50 @@ app.get('/users', verifyToken, async (req, res) => {
   }
 });
 
+// Get user statuses (admin only) - New endpoint
+app.get('/users/status', verifyToken, async (req, res) => {
+  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  try {
+    const users = await User.find({}, '-password');
+    const locations = await Location.aggregate([
+      { $sort: { userId: 1, timestamp: -1 } },
+      {
+        $group: {
+          _id: '$userId',
+          userId: { $first: '$userId' },
+          appStatus: { $first: '$appStatus' },
+          timestamp: { $first: '$timestamp' },
+        },
+      },
+    ]);
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const userStatuses = users.map(user => {
+      const location = locations.find(loc => loc.userId === user._id.toString());
+      const status = location && location.timestamp >= fiveMinutesAgo ? location.appStatus : 'offline';
+      return {
+        _id: user._id,
+        username: user.username,
+        name: user.name,
+        email: user.email,
+        number: user.number,
+        isAdmin: user.isAdmin,
+        status,
+        isSendingLocation: !!location && location.timestamp >= fiveMinutesAgo,
+      };
+    });
+    res.json(userStatuses);
+  } catch (err) {
+    console.error('Get user statuses error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Add user (admin only)
 app.post('/users', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
   try {
     const { username, password, name, email, number } = req.body;
-    console.log('Add user request:', req.body); // Debug log
+    console.log('Add user request:', req.body);
     if (!username || !password || !name || !email || !number) {
       return res.status(400).json({ message: 'All fields are required' });
     }
@@ -255,11 +292,14 @@ app.get('/tracking/:userId', verifyToken, async (req, res) => {
   try {
     const locations = await Location.find({ userId: req.params.userId }).sort({ timestamp: -1 }).limit(1);
     if (!locations.length) return res.status(404).json({ message: 'No tracking data found' });
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     res.json({
       userId: locations[0].userId,
       latitude: locations[0].latitude,
       longitude: locations[0].longitude,
       speed: locations[0].speed ?? 0.0,
+      appStatus: locations[0].timestamp >= fiveMinutesAgo ? locations[0].appStatus : 'offline',
+      isSendingLocation: locations[0].timestamp >= fiveMinutesAgo,
       timestamp: locations[0].timestamp,
     });
   } catch (err) {
@@ -281,15 +321,19 @@ app.get('/locations', verifyToken, async (req, res) => {
           latitude: { $first: '$latitude' },
           longitude: { $first: '$longitude' },
           speed: { $first: '$speed' },
+          appStatus: { $first: '$appStatus' },
           timestamp: { $first: '$timestamp' },
         },
       },
     ]);
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     res.json(locations.map(loc => ({
       userId: loc.userId,
       latitude: loc.latitude,
       longitude: loc.longitude,
       speed: loc.speed ?? 0.0,
+      appStatus: loc.timestamp >= fiveMinutesAgo ? loc.appStatus : 'offline',
+      isSendingLocation: loc.timestamp >= fiveMinutesAgo,
       timestamp: loc.timestamp,
     })));
   } catch (err) {
@@ -312,7 +356,7 @@ app.get('/history/:userId', verifyToken, async (req, res) => {
 // Send location data
 app.post('/location', verifyToken, async (req, res) => {
   try {
-    const { userId, latitude, longitude, speed, timestamp, startLatitude, startLongitude, isStartLocation } = req.body;
+    const { userId, latitude, longitude, speed, timestamp, startLatitude, startLongitude, isStartLocation, appStatus } = req.body;
     if (!userId || !latitude || !longitude) {
       return res.status(400).json({ message: 'userId, latitude, and longitude are required' });
     }
@@ -326,6 +370,7 @@ app.post('/location', verifyToken, async (req, res) => {
       latitude,
       longitude,
       speed: speed ?? 0.0,
+      appStatus: appStatus ?? 'foreground',
       timestamp: timestamp ? new Date(timestamp) : Date.now(),
     });
     await location.save();
@@ -394,4 +439,3 @@ function calculateTimeTaken(locations) {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
-

@@ -44,7 +44,7 @@ const locationSchema = new mongoose.Schema({
   latitude: { type: Number, required: true },
   longitude: { type: Number, required: true },
   speed: { type: Number, default: 0.0 },
-  appStatus: { type: String, enum: ['foreground', 'background'], default: 'foreground' }, // New field
+  appStatus: { type: String, enum: ['foreground', 'background','offline'], default: 'offline' }, // New field
   timestamp: { type: Date, default: Date.now },
 });
 const Location = mongoose.model('Location', locationSchema);

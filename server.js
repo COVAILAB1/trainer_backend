@@ -3,17 +3,9 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
-const http = require('http');
-const socketIo = require('socket.io');
-
 const app = express();
-const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] }
-});
-
 const port = process.env.PORT || 3000;
-const secretKey = process.env.JWT_SECRET || 'tamil';
+const secretKey = process.env.JWT_SECRET || 'tamil'; // Use environment variable for security
 
 app.use(cors());
 app.use(express.json());
@@ -46,13 +38,13 @@ const destinationSchema = new mongoose.Schema({
 destinationSchema.index({ userId: 1, date: 1 }, { unique: true });
 const Destination = mongoose.model('Destination', destinationSchema);
 
-// Location Schema - for live tracking (one record per user)
+// Location Schema
 const locationSchema = new mongoose.Schema({
-  userId: { type: String, required: true, unique: true },
+  userId: { type: String, required: true },
   latitude: { type: Number, required: true },
   longitude: { type: Number, required: true },
   speed: { type: Number, default: 0.0 },
-  appStatus: { type: String, enum: ['foreground', 'background','offline'], default: 'offline' },
+  appStatus: { type: String, enum: ['foreground', 'background','offline'], default: 'offline' }, // New field
   timestamp: { type: Date, default: Date.now },
 });
 const Location = mongoose.model('Location', locationSchema);
@@ -63,11 +55,10 @@ const historySchema = new mongoose.Schema({
   date: { type: String, required: true },
   distance: { type: Number, required: true },
   timeTaken: { type: String, required: true },
-  path: [{ latitude: Number, longitude: Number, timestamp: Date }],
+  path: [{ latitude: Number, longitude: Number }],
   startLatitude: { type: Number },
   startLongitude: { type: Number },
 });
-historySchema.index({ userId: 1, date: 1 }, { unique: true });
 const History = mongoose.model('History', historySchema);
 
 // Middleware to verify JWT
@@ -81,203 +72,6 @@ const verifyToken = (req, res, next) => {
     next();
   });
 };
-
-// Socket.IO authentication middleware
-const authenticateSocket = (socket, next) => {
-  const token = socket.handshake.auth.token;
-  if (!token) {
-    return next(new Error('Authentication error'));
-  }
-  
-  jwt.verify(token, secretKey, (err, decoded) => {
-    if (err) {
-      return next(new Error('Authentication error'));
-    }
-    socket.userId = decoded.userId;
-    socket.isAdmin = decoded.isAdmin;
-    next();
-  });
-};
-
-io.use(authenticateSocket);
-
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.userId}`);
-  
-  // Join user to their room for real-time updates
-  socket.join(`user_${socket.userId}`);
-  
-  if (socket.isAdmin) {
-    socket.join('admin_room');
-  }
-
-  // Handle location updates from mobile app
-  socket.on('location', async (data) => {
-    try {
-      const { latitude, longitude, speed, timestamp, startLatitude, startLongitude, isStartLocation, appStatus } = data;
-      const userId = socket.userId;
-      
-      console.log('Socket location request:', { userId, ...data });
-      
-      if (!latitude || !longitude) {
-        socket.emit('locationError', { message: 'latitude and longitude are required' });
-        return;
-      }
-      
-      const user = await User.findById(userId);
-      if (!user) {
-        socket.emit('locationError', { message: 'User not found' });
-        return;
-      }
-
-      const locationTimestamp = timestamp ? new Date(timestamp) : new Date();
-      const date = locationTimestamp.toISOString().split('T')[0];
-
-      // 1. Update current location for live tracking (upsert instead of delete)
-      await Location.findOneAndUpdate(
-        { userId },
-        {
-          userId,
-          latitude,
-          longitude,
-          speed: speed ?? 0.0,
-          appStatus: appStatus || 'foreground',
-          timestamp: locationTimestamp,
-        },
-        { upsert: true, new: true }
-      );
-
-      // 2. Update history with all location points
-      let historyRecord = await History.findOne({ userId, date });
-      
-      if (!historyRecord) {
-        // Create new history record
-        historyRecord = new History({
-          userId,
-          date,
-          distance: 0,
-          timeTaken: '0.00 minutes',
-          path: [],
-        });
-        
-        // Set start location if provided or use first location
-        if (isStartLocation && startLatitude != null && startLongitude != null) {
-          historyRecord.startLatitude = startLatitude;
-          historyRecord.startLongitude = startLongitude;
-        } else {
-          historyRecord.startLatitude = latitude;
-          historyRecord.startLongitude = longitude;
-        }
-      }
-
-      // Add current point to path
-      historyRecord.path.push({
-        latitude,
-        longitude,
-        timestamp: locationTimestamp
-      });
-
-      // Update start location if explicitly marked as start
-      if (isStartLocation && startLatitude != null && startLongitude != null) {
-        historyRecord.startLatitude = startLatitude;
-        historyRecord.startLongitude = startLongitude;
-      }
-
-      // Calculate distance and time
-      if (historyRecord.path.length > 1) {
-        historyRecord.distance = calculateDistance(historyRecord.path);
-        historyRecord.timeTaken = calculateTimeTaken(historyRecord.path);
-      }
-
-      await historyRecord.save();
-
-      // 3. Prepare location update data
-      const locationUpdate = {
-        userId,
-        latitude,
-        longitude,
-        speed: speed ?? 0.0,
-        appStatus: appStatus || 'foreground',
-        timestamp: locationTimestamp,
-        distance: historyRecord.distance,
-        timeTaken: historyRecord.timeTaken,
-        totalPoints: historyRecord.path.length
-      };
-
-      // 4. Emit confirmations and updates
-      // Confirm to sender
-      socket.emit('locationSaved', {
-        message: 'Location saved',
-        distance: historyRecord.distance,
-        timeTaken: historyRecord.timeTaken,
-        totalPoints: historyRecord.path.length
-      });
-
-      // Emit to admin dashboard
-      socket.to('admin_room').emit('userLocationUpdate', locationUpdate);
-      
-      // Emit to all users in same room (if needed for group tracking)
-      socket.to(`user_${userId}`).emit('locationUpdate', locationUpdate);
-
-    } catch (err) {
-      console.error('Socket location error:', err);
-      socket.emit('locationError', { message: 'Server error processing location' });
-    }
-  });
-
-  // Handle tracking start from mobile app
-  socket.on('trackingStart', async (data) => {
-    try {
-      const { latitude, longitude } = data;
-      const userId = socket.userId;
-      const date = new Date().toISOString().split('T')[0];
-
-      await History.findOneAndUpdate(
-        { userId, date },
-        {
-          userId,
-          date,
-          startLatitude: latitude,
-          startLongitude: longitude,
-          distance: 0,
-          timeTaken: '0.00 minutes',
-          path: [{
-            latitude,
-            longitude,
-            timestamp: new Date()
-          }],
-        },
-        { upsert: true, new: true }
-      );
-
-      socket.emit('trackingStarted', { message: 'Tracking started', date });
-      socket.to('admin_room').emit('userTrackingStarted', { userId, latitude, longitude, date });
-
-    } catch (err) {
-      console.error('Socket tracking start error:', err);
-      socket.emit('trackingError', { message: 'Error starting tracking' });
-    }
-  });
-
-  // Handle tracking end from mobile app
-  socket.on('trackingEnd', async () => {
-    try {
-      const userId = socket.userId;
-      
-      socket.emit('trackingEnded', { message: 'Tracking ended' });
-      socket.to('admin_room').emit('userTrackingEnded', { userId });
-
-    } catch (err) {
-      console.error('Socket tracking end error:', err);
-      socket.emit('trackingError', { message: 'Error ending tracking' });
-    }
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.userId}`);
-  });
-});
 
 // Log all incoming requests for debugging
 app.use((req, res, next) => {
@@ -314,7 +108,7 @@ app.get('/users', verifyToken, async (req, res) => {
   }
 });
 
-// Get user statuses (admin only)
+// Get user statuses (admin only) - New endpoint
 app.get('/users/status', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
   try {
@@ -419,31 +213,24 @@ app.delete('/users/:userId', verifyToken, async (req, res) => {
 });
 
 // Assign destination (admin only)
-// Assign destination (admin only)
 app.post('/destination', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
-  
   try {
-    const { userId, latitude, longitude } = req.body;
-    
-    if (!userId || !latitude || !longitude) {
-      return res.status(400).json({ message: 'userId, latitude, and longitude are required' });
+    const { userId, latitude, longitude, date } = req.body;
+    if (!userId || !latitude || !longitude || !date) {
+      return res.status(400).json({ message: 'userId, latitude, longitude, and date are required' });
     }
-
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD' });
+    }
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
-    // Find existing destination and update, or create new one
-    const destination = await Destination.findOneAndUpdate(
-      { userId },
-      { latitude, longitude },
-      { new: true, upsert: true }
-    );
-
-    const message = destination.isNew ? 'Destination assigned' : 'Destination updated';
-    res.status(201).json({ message });
+    await Destination.findOneAndDelete({ userId, date });
+    const destination = new Destination({ userId, latitude, longitude, date });
+    await destination.save();
+    res.status(201).json({ message: 'Destination assigned' });
   } catch (err) {
     console.error('Assign destination error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -453,20 +240,10 @@ app.post('/destination', verifyToken, async (req, res) => {
 // Get user destination
 app.get('/destination/:userId', verifyToken, async (req, res) => {
   try {
-    const destination = await Destination.findOne({ 
-      userId: req.params.userId
-    });
-    
-    if (!destination) {
-      return res.status(404).json({ message: 'No destination found' });
-    }
-    
-    res.json({ 
-      userId: destination.userId, 
-      latitude: destination.latitude, 
-      longitude: destination.longitude,
-      date: destination.date 
-    });
+    const today = new Date().toISOString().split('T')[0];
+    const destination = await Destination.findOne({ userId: req.params.userId, date: today });
+    if (!destination) return res.status(404).json({ message: 'No destination found for today' });
+    res.json({ userId: destination.userId, latitude: destination.latitude, longitude: destination.longitude, date: destination.date });
   } catch (err) {
     console.error('Get destination error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -476,37 +253,55 @@ app.get('/destination/:userId', verifyToken, async (req, res) => {
 // Delete destination (admin only)
 app.delete('/destination/:userId', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
-  
   try {
-    const destination = await Destination.findOneAndDelete({ 
-      userId: req.params.userId
-    });
-    
+    const today = new Date().toISOString().split('T')[0];
+    const destination = await Destination.findOneAndDelete({ userId: req.params.userId, date: today });
     if (!destination) {
-      return res.status(404).json({ message: 'No destination found' });
+      return res.status(404).json({ message: 'No destination found for today' });
     }
-    
     res.json({ message: 'Destination deleted' });
   } catch (err) {
     console.error('Delete destination error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// Get today's destinations (admin only)
+app.get('/destinations/today', verifyToken, async (req, res) => {
+  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  try {
+    const { date } = req.query;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ message: 'Valid date parameter (YYYY-MM-DD) is required' });
+    }
+    const destinations = await Destination.find({ date });
+    res.json(destinations.map(dest => ({
+      userId: dest.userId,
+      latitude: dest.latitude,
+      longitude: dest.longitude,
+      date: dest.date,
+    })));
+  } catch (err) {
+    console.error('Get today\'s destinations error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Get user tracking data
 app.get('/tracking/:userId', verifyToken, async (req, res) => {
   try {
-    const location = await Location.findOne({ userId: req.params.userId });
-    if (!location) return res.status(404).json({ message: 'No tracking data found' });
+    const locations = await Location.find({ userId: req.params.userId }).sort({ timestamp: -1 }).limit(1);
+    if (!locations.length) return res.status(404).json({ message: 'No tracking data found' });
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    console.log('Tracking data:', location)
+    console.log('Tracking data:', locations)
     res.json({
-      userId: location.userId,
-      latitude: location.latitude,
-      longitude: location.longitude,
-      speed: location.speed ?? 0.0,
-      appStatus: location.timestamp >= fiveMinutesAgo ? location.appStatus : 'offline',
-      isSendingLocation: location.timestamp >= fiveMinutesAgo,
-      timestamp: location.timestamp,
+      userId: locations[0].userId,
+      latitude: locations[0].latitude,
+      longitude: locations[0].longitude,
+      speed: locations[0].speed ?? 0.0,
+      appStatus: locations[0].timestamp >= fiveMinutesAgo ? locations[0].appStatus : 'offline',
+      isSendingLocation: locations[0].timestamp >= fiveMinutesAgo,
+      timestamp: locations[0].timestamp,
     });
   } catch (err) {
     console.error('Get tracking data error:', err);
@@ -518,7 +313,20 @@ app.get('/tracking/:userId', verifyToken, async (req, res) => {
 app.get('/locations', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
   try {
-    const locations = await Location.find({});
+    const locations = await Location.aggregate([
+      { $sort: { userId: 1, timestamp: -1 } },
+      {
+        $group: {
+          _id: '$userId',
+          userId: { $first: '$userId' },
+          latitude: { $first: '$latitude' },
+          longitude: { $first: '$longitude' },
+          speed: { $first: '$speed' },
+          appStatus: { $first: '$appStatus' },
+          timestamp: { $first: '$timestamp' },
+        },
+      },
+    ]);
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     res.json(locations.map(loc => ({
       userId: loc.userId,
@@ -542,6 +350,59 @@ app.get('/history/:userId', verifyToken, async (req, res) => {
     res.json(history);
   } catch (err) {
     console.error('Get history error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Send location data
+app.post('/location', verifyToken, async (req, res) => {
+  try {
+    const { userId, latitude, longitude, speed, timestamp, startLatitude, startLongitude, isStartLocation, appStatus } = req.body;
+    console.log('Send location request:', req.body);
+    if (!userId || !latitude || !longitude) {
+      return res.status(400).json({ message: 'userId, latitude, and longitude are required' });
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    await Location.deleteMany({ userId });
+    const location = new Location({
+      userId,
+      latitude,
+      longitude,
+      speed: speed ?? 0.0,
+      appStatus: appStatus ,
+      timestamp: timestamp ? new Date(timestamp) : Date.now(),
+    });
+    await location.save();
+    const date = new Date(timestamp || Date.now()).toISOString().split('T')[0];
+    const locations = await Location.find({ userId, timestamp: { $gte: new Date(date) } }).sort({ timestamp: 1 });
+    let path = locations.map(loc => ({ latitude: loc.latitude, longitude: loc.longitude }));
+    const historyData = {
+      userId,
+      date,
+      distance: 0,
+      timeTaken: '0.00 minutes',
+      path,
+    };
+    if (isStartLocation && startLatitude != null && startLongitude != null) {
+      historyData.startLatitude = startLatitude;
+      historyData.startLongitude = startLongitude;
+      historyData.path = [{ latitude: startLatitude, longitude: startLongitude }, ...path];
+    }
+    if (historyData.path.length > 1) {
+      historyData.distance = calculateDistance(historyData.path);
+      historyData.timeTaken = calculateTimeTaken(locations);
+    }
+    await History.findOneAndUpdate(
+      { userId, date },
+      historyData,
+      { upsert: true, new: true }
+    );
+    res.status(201).json({ message: 'Location saved' });
+  } catch (err) {
+    console.error('Send location error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -577,6 +438,6 @@ function calculateTimeTaken(locations) {
   return `${diff.toFixed(2)} minutes`;
 }
 
-server.listen(port, () => {
+app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });

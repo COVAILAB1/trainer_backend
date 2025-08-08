@@ -446,8 +446,8 @@ app.post('/destination', verifyToken, async (req, res) => {
 // Get user destination
 app.get('/destination/:userId', verifyToken, async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const destination = await Destination.findOne({ userId: req.params.userId, date: today });
+   
+    const destination = await Destination.findOne({ userId: req.params.userId });
     if (!destination) return res.status(404).json({ message: 'No destination found for today' });
     res.json({ userId: destination.userId, latitude: destination.latitude, longitude: destination.longitude, date: destination.date });
   } catch (err) {

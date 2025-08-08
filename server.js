@@ -354,30 +354,48 @@ app.get('/history/:userId', verifyToken, async (req, res) => {
 });
 
 // Send location data
+// Send location data
 app.post('/location', verifyToken, async (req, res) => {
   try {
     const { userId, latitude, longitude, speed, timestamp, startLatitude, startLongitude, isStartLocation, appStatus } = req.body;
     console.log('Send location request:', req.body);
+
     if (!userId || !latitude || !longitude) {
       return res.status(400).json({ message: 'userId, latitude, and longitude are required' });
     }
+
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    await Location.deleteMany({ userId });
-    const location = new Location({
+
+    // Update or insert location using findOneAndUpdate with upsert
+    const locationData = {
       userId,
       latitude,
       longitude,
       speed: speed ?? 0.0,
-      appStatus: appStatus ,
+      appStatus: appStatus,
       timestamp: timestamp ? new Date(timestamp) : Date.now(),
-    });
-    await location.save();
+    };
+
+    await Location.findOneAndUpdate(
+      { userId }, // filter by userId to update the user's current location
+      locationData,
+      { upsert: true, new: true }
+    );
+
     const date = new Date(timestamp || Date.now()).toISOString().split('T')[0];
-    const locations = await Location.find({ userId, timestamp: { $gte: new Date(date) } }).sort({ timestamp: 1 });
-    let path = locations.map(loc => ({ latitude: loc.latitude, longitude: loc.longitude }));
+    const locations = await Location.find({ 
+      userId, 
+      timestamp: { $gte: new Date(date) } 
+    }).sort({ timestamp: 1 });
+
+    let path = locations.map(loc => ({ 
+      latitude: loc.latitude, 
+      longitude: loc.longitude 
+    }));
+
     const historyData = {
       userId,
       date,
@@ -385,27 +403,31 @@ app.post('/location', verifyToken, async (req, res) => {
       timeTaken: '0.00 minutes',
       path,
     };
+
     if (isStartLocation && startLatitude != null && startLongitude != null) {
       historyData.startLatitude = startLatitude;
       historyData.startLongitude = startLongitude;
       historyData.path = [{ latitude: startLatitude, longitude: startLongitude }, ...path];
     }
+
     if (historyData.path.length > 1) {
       historyData.distance = calculateDistance(historyData.path);
       historyData.timeTaken = calculateTimeTaken(locations);
     }
+
+    // This was already using upsert, so no change needed here
     await History.findOneAndUpdate(
       { userId, date },
       historyData,
       { upsert: true, new: true }
     );
+
     res.status(201).json({ message: 'Location saved' });
   } catch (err) {
     console.error('Send location error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
-
 // Helper function to calculate distance (Haversine formula)
 function calculateDistance(locations) {
   let totalDistance = 0;

@@ -419,24 +419,31 @@ app.delete('/users/:userId', verifyToken, async (req, res) => {
 });
 
 // Assign destination (admin only)
+// Assign destination (admin only)
 app.post('/destination', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  
   try {
-    const { userId, latitude, longitude, date } = req.body;
-    if (!userId || !latitude || !longitude || !date) {
-      return res.status(400).json({ message: 'userId, latitude, longitude, and date are required' });
+    const { userId, latitude, longitude } = req.body;
+    
+    if (!userId || !latitude || !longitude) {
+      return res.status(400).json({ message: 'userId, latitude, and longitude are required' });
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD' });
-    }
+
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-    await Destination.findOneAndDelete({ userId, date });
-    const destination = new Destination({ userId, latitude, longitude, date });
-    await destination.save();
-    res.status(201).json({ message: 'Destination assigned' });
+
+    // Find existing destination and update, or create new one
+    const destination = await Destination.findOneAndUpdate(
+      { userId },
+      { latitude, longitude },
+      { new: true, upsert: true }
+    );
+
+    const message = destination.isNew ? 'Destination assigned' : 'Destination updated';
+    res.status(201).json({ message });
   } catch (err) {
     console.error('Assign destination error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -446,10 +453,20 @@ app.post('/destination', verifyToken, async (req, res) => {
 // Get user destination
 app.get('/destination/:userId', verifyToken, async (req, res) => {
   try {
-   
-    const destination = await Destination.findOne({ userId: req.params.userId });
-    if (!destination) return res.status(404).json({ message: 'No destination found for today' });
-    res.json({ userId: destination.userId, latitude: destination.latitude, longitude: destination.longitude, date: destination.date });
+    const destination = await Destination.findOne({ 
+      userId: req.params.userId
+    });
+    
+    if (!destination) {
+      return res.status(404).json({ message: 'No destination found' });
+    }
+    
+    res.json({ 
+      userId: destination.userId, 
+      latitude: destination.latitude, 
+      longitude: destination.longitude,
+      date: destination.date 
+    });
   } catch (err) {
     console.error('Get destination error:', err);
     res.status(500).json({ message: 'Server error' });
@@ -459,40 +476,22 @@ app.get('/destination/:userId', verifyToken, async (req, res) => {
 // Delete destination (admin only)
 app.delete('/destination/:userId', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const destination = await Destination.findOneAndDelete({ userId: req.params.userId, date: today });
+    const destination = await Destination.findOneAndDelete({ 
+      userId: req.params.userId
+    });
+    
     if (!destination) {
-      return res.status(404).json({ message: 'No destination found for today' });
+      return res.status(404).json({ message: 'No destination found' });
     }
+    
     res.json({ message: 'Destination deleted' });
   } catch (err) {
     console.error('Delete destination error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
-
-// Get today's destinations (admin only)
-app.get('/destinations/today', verifyToken, async (req, res) => {
-  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
-  try {
-    const { date } = req.query;
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return res.status(400).json({ message: 'Valid date parameter (YYYY-MM-DD) is required' });
-    }
-    const destinations = await Destination.find({ date });
-    res.json(destinations.map(dest => ({
-      userId: dest.userId,
-      latitude: dest.latitude,
-      longitude: dest.longitude,
-      date: dest.date,
-    })));
-  } catch (err) {
-    console.error('Get today\'s destinations error:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
 // Get user tracking data
 app.get('/tracking/:userId', verifyToken, async (req, res) => {
   try {

@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
+const admin = require('firebase-admin');
 const app = express();
 const port = process.env.PORT || 3000;
 const secretKey = process.env.JWT_SECRET || 'tamil'; // Use environment variable for security
@@ -95,6 +96,54 @@ app.post('/login', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
+// Tracking started endpoint (admin receives notification)
+app.post('/api/tracking-started', async (req, res) => {
+  const { userId, timestamp } = req.body;
+  
+  try {
+    // Fetch user details from User model
+    const user = await User.findById(userId, '-password');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    const userName = user.name || user.username || 'Unknown User';
+    
+    // Send notification to admin topic
+    const adminMessage = {
+      notification: {
+        title: 'User Tracking Started',
+        body: `${userName} (ID: ${userId}) started location tracking`
+      },
+      data: {
+        userId: userId,
+        userName: userName,
+        action: 'tracking_started',
+        timestamp: timestamp
+      },
+      topic: 'admin_notifications'
+    };
+
+    await admin.messaging().send(adminMessage);
+    
+    
+    // If you have a TrackingSession model
+    // await TrackingSession.create(trackingSession);
+    
+    res.status(200).json({ 
+      success: true, 
+      message: 'Tracking started notification sent',
+      user: userName 
+    });
+    
+  } catch (err) {
+    console.error('Tracking started error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 
 // Get all users (admin only)
 app.get('/users', verifyToken, async (req, res) => {

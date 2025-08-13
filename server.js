@@ -10,10 +10,12 @@ const admin = require('firebase-admin');
 require('dotenv').config(); // npm install dotenv
 
 const app = express();
+app.use(cors());
+app.use(express.json());
 const port = process.env.PORT || 3000;
 const secretKey = process.env.JWT_SECRET || 'tamil';
 
-const serviceAccount = {
+const serviceAccount ={
   "type": "service_account",
   "project_id": "trainertrack-e6238",
   "private_key_id": "6c00955c39028ca41206fee2d3200ff482e665da",
@@ -25,8 +27,8 @@ const serviceAccount = {
   "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
   "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40trainertrack-e6238.iam.gserviceaccount.com",
   "universe_domain": "googleapis.com"
-};
-
+}
+;
 
 // Initialize Firebase Admin with the service account
 try {

@@ -346,7 +346,45 @@ app.post('/api/tracking-started', async (req, res) => {
     });
   }
 });
+app.post('/api/notify-proximity', verifyToken, async (req, res) => {
+  try {
+    const { userId, userName,  distanceToDestination, timestamp,} = req.body;
 
+    // Validate required fields
+    if (!userId ||  !distanceToDestination || !timestamp) {
+      return res.status(400).json({ message: 'userId,, distanceToDestination, and timestamp are required' });
+    }
+
+    // Send FCM notification with retry logic
+    const messagingResult = await safeFirestoreOperation(async () => {
+      const message = {
+        notification: {
+          title: 'User Approaching Destination',
+          body: `${userName} is within ${distanceToDestination.toFixed(1)} meters of their destination.`,
+        },
+        data: {
+          userName: userName || userId,
+          distanceToDestination: distanceToDestination.toString(),
+          timestamp: timestamp.toString(),
+          action: 'proximity_alert',
+        },
+        topic: 'admin_notifications',
+      };
+
+      return await admin.messaging().send(message);
+    });
+
+    res.status(200).json({ message: 'Proximity notification sent successfully', messageId: messagingResult });
+  } catch (err) {
+    console.error('❌ Error sending proximity notification:', err.stack);
+    if (err.code && err.code.startsWith('messaging/')) {
+      console.error('🔥 Firebase Messaging Error Details:');
+      console.error('Error code:', err.code);
+      console.error('Error details:', err.details);
+    }
+    res.status(500).json({ message: 'Server error', error: err.message, errorCode: err.code });
+  }
+});
 app.post('/api/tracking-stopped', async (req, res) => {
   const { userId, timestamp } = req.body;
   

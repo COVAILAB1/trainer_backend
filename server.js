@@ -417,7 +417,6 @@ app.post('/destination', verifyToken, async (req, res) => {
       },
       data: {
         action: 'destination_assigned',
-        timestamp: timestamp ? timestamp.toString() : new Date().toISOString() // Ensure string conversion
       },
       topic: 'destination_notifications'
     };

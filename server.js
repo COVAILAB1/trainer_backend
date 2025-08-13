@@ -13,34 +13,17 @@ const app = express();
 const port = process.env.PORT || 3000;
 const secretKey = process.env.JWT_SECRET || 'tamil';
 
-// Firebase Admin SDK Initialization with Environment Variables
-try {
-  if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_PRIVATE_KEY || !process.env.FIREBASE_CLIENT_EMAIL) {
-    throw new Error('Missing Firebase environment variables');
-  }
 
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'), // Handle escaped newlines
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    }),
+
+admin.initializeApp({
+  credential: admin.credential.cert({
     projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+  }),
   });
-  
-  console.log('✅ Firebase Admin SDK initialized with environment variables');
-  console.log('Firebase project ID:', process.env.FIREBASE_PROJECT_ID);
-  
-} catch (error) {
-  console.error('❌ Firebase Admin SDK initialization failed:', error.message);
-  console.log('📝 Make sure to set these environment variables:');
-  console.log('FIREBASE_PROJECT_ID=your-project-id');
-  console.log('FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"');
-  console.log('FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com');
-}
 
 
-// Your existing code continues here...
 app.use(cors());
 app.use(express.json());
 

@@ -8,6 +8,27 @@ const app = express();
 const port = process.env.PORT || 3000;
 const secretKey = process.env.JWT_SECRET || 'tamil'; // Use environment variable for security
 
+// ============= FIREBASE ADMIN SDK INITIALIZATION =============
+// Method 1: Using Service Account Key File (Recommended for development)
+try {
+  const serviceAccount = require('./firebase-service-account.json'); // Place your service account file in project root
+  
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    projectId: serviceAccount.project_id, // This will be read from the service account file
+  });
+  
+  console.log('✅ Firebase Admin SDK initialized successfully');
+  console.log('Firebase project ID:', admin.app().options.projectId);
+  
+} catch (error) {
+  console.error('❌ Firebase Admin SDK initialization failed:', error.message);
+  console.log('📝 Make sure to:');
+  console.log('1. Download your Firebase service account key from Firebase Console');
+  console.log('2. Save it as "firebase-service-account.json" in your project root');
+  console.log('3. Add it to .gitignore for security');
+}
+
 app.use(cors());
 app.use(express.json());
 
@@ -80,6 +101,46 @@ app.use((req, res, next) => {
   next();
 });
 
+// ============= TEST FIREBASE ENDPOINT =============
+// Add this endpoint to test Firebase notifications
+app.post('/api/test-firebase', async (req, res) => {
+  console.log('Testing Firebase notification...');
+  
+  try {
+    const testMessage = {
+      notification: {
+        title: 'Test Notification',
+        body: 'Firebase Admin SDK is working correctly!'
+      },
+      data: {
+        test: 'true',
+        timestamp: new Date().toISOString()
+      },
+      topic: 'admin_notifications'
+    };
+    
+    console.log('Sending test message:', JSON.stringify(testMessage, null, 2));
+    
+    const result = await admin.messaging().send(testMessage);
+    
+    console.log('✅ Test notification sent successfully:', result);
+    
+    res.json({
+      success: true,
+      message: 'Test notification sent',
+      messageId: result
+    });
+    
+  } catch (error) {
+    console.error('❌ Test notification failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: error.code
+    });
+  }
+});
+
 // Login endpoint
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
@@ -137,6 +198,7 @@ app.post('/api/tracking-started', async (req, res) => {
     // Debug: Check admin messaging setup
     console.log('Checking Firebase Admin setup...');
     console.log('admin.messaging available:', typeof admin.messaging);
+    console.log('Firebase app initialized:', !!admin.apps.length);
     
     // Send notification to admin topic
     const adminMessage = {
@@ -148,7 +210,7 @@ app.post('/api/tracking-started', async (req, res) => {
         userId: userId.toString(), // Ensure string conversion
         userName: userName,
         action: 'tracking_started',
-        timestamp: timestamp.toString() // Ensure string conversion
+        timestamp: timestamp ? timestamp.toString() : new Date().toISOString() // Ensure string conversion
       },
       topic: 'admin_notifications'
     };
@@ -160,9 +222,6 @@ app.post('/api/tracking-started', async (req, res) => {
     
     console.log('✅ Notification sent successfully!');
     console.log('Firebase messaging result:', messagingResult);
-    
-    // If you have a TrackingSession model
-    // await TrackingSession.create(trackingSession);
     
     res.status(200).json({
       success: true,
@@ -197,7 +256,6 @@ app.post('/api/tracking-started', async (req, res) => {
     });
   }
 });
-
 
 // Get all users (admin only)
 app.get('/users', verifyToken, async (req, res) => {
@@ -457,7 +515,6 @@ app.get('/history/:userId', verifyToken, async (req, res) => {
 });
 
 // Send location data
-// Send location data
 app.post('/location', verifyToken, async (req, res) => {
   try {
     const { userId, latitude, longitude, speed, timestamp, startLatitude, startLongitude, isStartLocation, appStatus } = req.body;
@@ -531,6 +588,7 @@ app.post('/location', verifyToken, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+
 // Helper function to calculate distance (Haversine formula)
 function calculateDistance(locations) {
   let totalDistance = 0;

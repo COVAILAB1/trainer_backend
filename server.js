@@ -8,7 +8,7 @@ const admin = require('firebase-admin');
 
 // Load environment variables
 require('dotenv').config(); // npm install dotenv
-
+gr
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -150,21 +150,7 @@ async function safeFirestoreOperation(operation) {
   return withFirebaseRetry(operation);
 }
 
-// Example usage in your routes:
-/*
-app.get('/test-firebase', async (req, res) => {
-  try {
-    const result = await safeFirestoreOperation(async () => {
-      return await admin.firestore().collection('test').doc('test').get();
-    });
-    
-    res.json({ success: true, exists: result.exists });
-  } catch (error) {
-    console.error('Firebase operation failed:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-*/
+
 
 // MongoDB connection
 mongoose.connect('mongodb+srv://covailabs1:dpBIwF4ZZcJQkgjA@cluster0.jr1ju8f.mongodb.net/trainer_track?retryWrites=true&w=majority&appName=Cluster0', {
@@ -493,7 +479,8 @@ app.post('/destination', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
   
   try {
-    const { userId, latitude, longitude } = req.body;
+    const { userId, latitude, longitude,date } = req.body;
+    console.log('Assign destination request:', req.body);
     
     if (!userId || !latitude || !longitude) {
       return res.status(400).json({ message: 'userId, latitude, and longitude are required' });
@@ -507,6 +494,7 @@ app.post('/destination', verifyToken, async (req, res) => {
     const destination = await Destination.findOneAndUpdate(
       { userId },
       { latitude, longitude },
+      {date},
       { new: true, upsert: true }
     );
 
@@ -526,6 +514,7 @@ app.post('/destination', verifyToken, async (req, res) => {
       const messagingResult = await admin.messaging().send(adminMessage);
       console.log('✅ Destination notification sent successfully:', messagingResult);
       return messagingResult;
+
     });
     
     const message = destination.isNew ? 'Destination assigned' : 'Destination updated';

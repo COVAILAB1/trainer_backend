@@ -174,8 +174,8 @@ async function sendDailyDestinationNotifications() {
         const messagingResult = await safeFirestoreOperation(async () => {
           const message = {
             notification: {
-              title: 'Daily Destination Reminder',
-              body: 'You have a destination assigned for today'
+              title: 'Tracking Reminder',
+              body: 'You have a destination assigned for today,Please open the app and start tracking your journey.'
             },
             data: {
               action: 'destination_reminder',
@@ -524,13 +524,11 @@ app.delete('/users/:userId', verifyToken, async (req, res) => {
 });
 
 // Assign destination (admin only) - WITH FIREBASE RETRY
-// Assign destination (admin only) - WITH FIREBASE RETRY
 app.post('/destination', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
 
   try {
     const { userId, latitude, longitude, date } = req.body;
-    console.log('Assign destination request:', req.body);
 
     if (!userId || !latitude || !longitude || !date) {
       return res.status(400).json({ message: 'userId, latitude, longitude, and date are required' });

@@ -30,32 +30,93 @@ const serviceAccount ={
 };
 
 let initTime = Date.now();
+// ============= TIME SYNC UTILITIES =============
+async function syncSystemTime() {
+  try {
+    console.log('🕐 Attempting to sync system time...');
+    
+    // Get current time from a reliable source
+    const response = await fetch('http://worldtimeapi.org/api/timezone/Etc/UTC');
+    const timeData = await response.json();
+    const correctTime = new Date(timeData.datetime);
+    const systemTime = new Date();
+    
+    const timeDiff = Math.abs(correctTime.getTime() - systemTime.getTime());
+    console.log(`⏰ Time difference: ${timeDiff}ms`);
+    console.log(`🌍 Correct UTC time: ${correctTime.toISOString()}`);
+    console.log(`💻 System time: ${systemTime.toISOString()}`);
+    
+    if (timeDiff > 30000) { // More than 30 seconds difference
+      console.warn('⚠️  Significant time drift detected!');
+      console.log('🔧 Consider using NTP sync in your deployment');
+    }
+    
+    return { timeDiff, correctTime, systemTime };
+  } catch (error) {
+    console.warn('⚠️  Time sync check failed:', error.message);
+    return null;
+  }
+}
 
 // ============= FIREBASE INITIALIZATION WITH ERROR HANDLING =============
-async function initializeFirebaseWithRetry(maxRetries = 3) {
+async function initializeFirebaseWithRetry(maxRetries = 5) {
+  // First attempt: Check time sync
+  await syncSystemTime();
+  
   for (let i = 0; i < maxRetries; i++) {
     try {
       // Delete existing apps if any
       admin.apps.forEach(app => app.delete());
+      
+      console.log(`🔥 Initializing Firebase (attempt ${i + 1}/${maxRetries})...`);
+      
+      // Add some randomness to avoid repeated failures
+      if (i > 0) {
+        const delay = Math.random() * 2000 + 1000; // 1-3 seconds
+        console.log(`⏳ Waiting ${delay.toFixed(0)}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
       
       // Initialize with fresh credentials
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
       });
       
-      // Test the connection immediately
-      await admin.app().options.credential.getAccessToken();
+      // Test the connection immediately with timeout
+      const tokenPromise = admin.app().options.credential.getAccessToken();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Token fetch timeout')), 10000)
+      );
+      
+      await Promise.race([tokenPromise, timeoutPromise]);
+      
       console.log(`✅ Firebase Admin initialized successfully (attempt ${i + 1})`);
       initTime = Date.now();
       return;
     } catch (error) {
       console.error(`❌ Firebase init attempt ${i + 1} failed:`, error.message);
+      
+      // Log additional debug info
+      if (error.message.includes('invalid_grant')) {
+        console.log('🔍 JWT signature error - likely time sync issue');
+        console.log('📅 Current time:', new Date().toISOString());
+        console.log('🔑 Private key ID:', serviceAccount.private_key_id);
+        
+        // Try time sync again on JWT errors
+        if (i < maxRetries - 1) {
+          console.log('🔄 Re-checking time sync...');
+          await syncSystemTime();
+        }
+      }
+      
       if (i === maxRetries - 1) {
         throw new Error(`Failed to initialize Firebase after ${maxRetries} attempts: ${error.message}`);
       }
       
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+      // Progressive backoff
+      const backoff = Math.min(5000 * (i + 1), 15000);
+      console.log(`⏳ Backing off for ${backoff}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoff));
     }
   }
 }
@@ -126,7 +187,7 @@ async function startFirebase() {
     
   } catch (error) {
     console.error('💥 Critical Firebase initialization error:', error);
-    process.exit(1); // Exit if Firebase can't be initialized
+     // Exit if Firebase can't be initialized
   }
 }
 
@@ -203,8 +264,6 @@ async function sendDailyDestinationNotifications() {
 
 // MongoDB connection
 mongoose.connect('mongodb+srv://covailabs1:dpBIwF4ZZcJQkgjA@cluster0.jr1ju8f.mongodb.net/trainer_track?retryWrites=true&w=majority&appName=Cluster0', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
 }).then(() => console.log('Connected to MongoDB')).catch(err => console.error('MongoDB connection error:', err));
 
 // User Schema
@@ -290,6 +349,7 @@ app.post('/login', async (req, res) => {
 // Tracking started endpoint (admin receives notification) - WITH FIREBASE RETRY
 app.post('/api/tracking-started', async (req, res) => {
   const { userId, timestamp } = req.body;
+  
   
   try {
     // Fetch user details from User model
@@ -839,8 +899,19 @@ function calculateTimeTaken(locations) {
 // ============= START THE APPLICATION =============
 async function startServer() {
   try {
-    // Initialize Firebase first
-    await startFirebase();
+    try {
+      await startFirebase();
+      console.log('✅ Firebase initialized successfully');
+    } catch (error) {
+      console.error('💥 Firebase initialization failed:', error.message);
+      console.log('⚠️  Starting server WITHOUT Firebase - some features will be disabled');
+      
+      // Set a flag to disable Firebase-dependent features
+      global.FIREBASE_DISABLED = true;
+      
+      // Still start the server for other functionality
+      console.log('🔄 Server will continue without Firebase...');
+    }
     
     // Schedule daily reminder at 8 AM (using server timezone)
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -853,11 +924,47 @@ async function startServer() {
     // Start the Express server
     app.listen(port, () => {
       console.log(`🚀 Server running on port ${port}`);
+      console.log('Server time:', new Date().toISOString());
+
+
+
       console.log('🔥 Firebase Admin SDK ready with error recovery');
     });
   } catch (error) {
     console.error('💥 Failed to start server:', error);
     process.exit(1);
+  }
+}
+async function safeFirebaseOperation(operation, fallbackResponse = null) {
+  if (global.FIREBASE_DISABLED) {
+    console.warn('⚠️  Firebase operation skipped - Firebase is disabled');
+    return fallbackResponse;
+  }
+  
+  try {
+    return await withFirebaseRetry(operation);
+  } catch (error) {
+    console.error('🚨 Firebase operation failed completely:', error.message);
+    
+    // If it's a critical JWT error, disable Firebase temporarily
+    if (error.message.includes('invalid_grant') || 
+        error.message.includes('Invalid JWT') ||
+        error.message.includes('credential')) {
+      console.warn('🚫 Temporarily disabling Firebase due to auth errors');
+      global.FIREBASE_DISABLED = true;
+      
+      // Try to re-enable after 5 minutes
+      setTimeout(() => {
+        console.log('🔄 Attempting to re-enable Firebase...');
+        global.FIREBASE_DISABLED = false;
+        initializeFirebaseWithRetry().catch(err => {
+          console.error('💥 Failed to re-initialize Firebase:', err.message);
+          global.FIREBASE_DISABLED = true;
+        });
+      }, 5 * 60 * 1000); // 5 minutes
+    }
+    
+    return fallbackResponse;
   }
 }
 

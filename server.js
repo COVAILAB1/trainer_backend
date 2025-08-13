@@ -8,7 +8,6 @@ const admin = require('firebase-admin');
 
 // Load environment variables
 require('dotenv').config(); // npm install dotenv
-gr
 const app = express();
 app.use(cors());
 app.use(express.json());

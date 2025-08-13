@@ -141,16 +141,6 @@ app.post('/api/tracking-started', async (req, res) => {
     
     // Fetch user details from User model
     const user = await User.findById(userId, '-password');
-    
-    if (user) {
-      console.log('User details:', {
-        id: user._id,
-        name: user.name,
-        username: user.username,
-        email: user.email // Add other relevant fields you want to check
-      });
-    }
-    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -220,14 +210,7 @@ app.post('/api/tracking-stopped', async (req, res) => {
     // Fetch user details from User model
     const user = await User.findById(userId, '-password');
     
-    if (user) {
-      console.log('User details:', {
-        id: user._id,
-        name: user.name,
-        username: user.username,
-        email: user.email // Add other relevant fields you want to check
-      });
-    }
+  
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -427,7 +410,21 @@ app.post('/destination', verifyToken, async (req, res) => {
       { latitude, longitude },
       { new: true, upsert: true }
     );
-
+    const adminMessage = {
+      notification: {
+        title: 'Destination assigned',
+        body: `You have been assigned with a new destination`
+      },
+      data: {
+        action: 'destination_assigned',
+        timestamp: timestamp ? timestamp.toString() : new Date().toISOString() // Ensure string conversion
+      },
+      topic: 'destination_notifications'
+    };
+    
+    const messagingResult = await admin.messaging().send(adminMessage);
+    console.log('✅ Destination notification sent successfully:', messagingResult);
+    
     const message = destination.isNew ? 'Destination assigned' : 'Destination updated';
     res.status(201).json({ message });
   } catch (err) {

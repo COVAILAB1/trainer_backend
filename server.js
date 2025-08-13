@@ -15,7 +15,7 @@ app.use(express.json());
 const port = process.env.PORT || 3000;
 const secretKey = process.env.JWT_SECRET || 'tamil';
 
-const serviceAccount ={
+const serviceAccount = {
   "type": "service_account",
   "project_id": "trainertrack-e6238",
   "private_key_id": "6c00955c39028ca41206fee2d3200ff482e665da",
@@ -27,23 +27,144 @@ const serviceAccount ={
   "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
   "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40trainertrack-e6238.iam.gserviceaccount.com",
   "universe_domain": "googleapis.com"
-}
-;
+};
 
-// Initialize Firebase Admin with the service account
-try {
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    console.log('✅ Firebase Admin initialized successfully with direct JSON');
+let initTime = Date.now();
+
+// ============= FIREBASE INITIALIZATION WITH ERROR HANDLING =============
+async function initializeFirebaseWithRetry(maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      // Delete existing apps if any
+      admin.apps.forEach(app => app.delete());
+      
+      // Initialize with fresh credentials
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      
+      // Test the connection immediately
+      await admin.app().options.credential.getAccessToken();
+      console.log(`✅ Firebase Admin initialized successfully (attempt ${i + 1})`);
+      initTime = Date.now();
+      return;
+    } catch (error) {
+      console.error(`❌ Firebase init attempt ${i + 1} failed:`, error.message);
+      if (i === maxRetries - 1) {
+        throw new Error(`Failed to initialize Firebase after ${maxRetries} attempts: ${error.message}`);
+      }
+      
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+    }
   }
-} catch (error) {
-  console.error('❌ Firebase initialization failed:', error);
 }
 
-app.use(cors());
-app.use(express.json());
+// ============= TOKEN REFRESH UTILITIES =============
+async function ensureFreshFirebaseToken() {
+  try {
+    // Force token refresh
+    await admin.app().options.credential.getAccessToken(true);
+    return true;
+  } catch (error) {
+    console.warn('🔄 Token refresh failed, reinitializing Firebase...', error.message);
+    await initializeFirebaseWithRetry();
+    return true;
+  }
+}
+
+// Wrapper function for Firebase operations with retry logic
+async function withFirebaseRetry(operation, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      const isAuthError = error.message.includes('invalid_grant') || 
+                         error.message.includes('Invalid JWT') ||
+                         error.message.includes('credential');
+      
+      if (isAuthError && i < maxRetries - 1) {
+        console.log(`🔄 Retry ${i + 1} after credential error: ${error.message}`);
+        
+        // Reinitialize Firebase
+        await initializeFirebaseWithRetry();
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+// ============= AUTOMATIC TOKEN REFRESH =============
+function setupAutomaticTokenRefresh() {
+  // Refresh token every 20 minutes (before it expires)
+  setInterval(async () => {
+    try {
+      console.log('🔄 Refreshing Firebase token...');
+      await ensureFreshFirebaseToken();
+      console.log('✅ Token refreshed successfully');
+    } catch (error) {
+      console.error('❌ Scheduled token refresh failed:', error.message);
+    }
+  }, 20 * 60 * 1000); // 20 minutes
+  
+  console.log('⏰ Automatic token refresh scheduled every 20 minutes');
+}
+
+// ============= INITIALIZE FIREBASE =============
+async function startFirebase() {
+  try {
+    await initializeFirebaseWithRetry();
+    setupAutomaticTokenRefresh();
+    
+    // Log initialization info
+    console.log('📊 Firebase initialized at:', new Date().toISOString());
+    console.log('🕐 Server timezone:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+    
+  } catch (error) {
+    console.error('💥 Critical Firebase initialization error:', error);
+    process.exit(1); // Exit if Firebase can't be initialized
+  }
+}
+
+// ============= ERROR HANDLING MIDDLEWARE =============
+process.on('unhandledRejection', (error) => {
+  if (error.message && error.message.includes('invalid_grant')) {
+    console.error('🚨 JWT signature error detected at:', new Date().toISOString());
+    console.error('⏱️  Time since last init:', Math.floor((Date.now() - initTime) / 1000 / 60), 'minutes');
+    
+    // Try to recover automatically
+    initializeFirebaseWithRetry().catch(err => {
+      console.error('💥 Failed to recover from JWT error:', err);
+    });
+  }
+});
+
+// ============= HELPER FUNCTIONS FOR YOUR ROUTES =============
+
+// Use this function to wrap any Firestore operations
+async function safeFirestoreOperation(operation) {
+  return withFirebaseRetry(operation);
+}
+
+// Example usage in your routes:
+/*
+app.get('/test-firebase', async (req, res) => {
+  try {
+    const result = await safeFirestoreOperation(async () => {
+      return await admin.firestore().collection('test').doc('test').get();
+    });
+    
+    res.json({ success: true, exists: result.exists });
+  } catch (error) {
+    console.error('Firebase operation failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+*/
 
 // MongoDB connection
 mongoose.connect('mongodb+srv://covailabs1:dpBIwF4ZZcJQkgjA@cluster0.jr1ju8f.mongodb.net/trainer_track?retryWrites=true&w=majority&appName=Cluster0', {
@@ -79,7 +200,7 @@ const locationSchema = new mongoose.Schema({
   latitude: { type: Number, required: true },
   longitude: { type: Number, required: true },
   speed: { type: Number, default: 0.0 },
-  appStatus: { type: String, enum: ['foreground', 'background','offline'], default: 'offline' }, // New field
+  appStatus: { type: String, enum: ['foreground', 'background','offline'], default: 'offline' },
   timestamp: { type: Date, default: Date.now },
 });
 const Location = mongoose.model('Location', locationSchema);
@@ -114,7 +235,6 @@ app.use((req, res, next) => {
   next();
 });
 
-
 // Login endpoint
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
@@ -132,16 +252,11 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Tracking started endpoint (admin receives notification)
+// Tracking started endpoint (admin receives notification) - WITH FIREBASE RETRY
 app.post('/api/tracking-started', async (req, res) => {
-
-  
   const { userId, timestamp } = req.body;
   
- 
-  
   try {
-    
     // Fetch user details from User model
     const user = await User.findById(userId, '-password');
     if (!user) {
@@ -150,46 +265,41 @@ app.post('/api/tracking-started', async (req, res) => {
     
     const userName = user.name || user.username || 'Unknown User';
 
-    // Send notification to admin topic
-    const adminMessage = {
-      notification: {
-        title: 'User Tracking Started',
-        body: `${userName} started location tracking`
-      },
-      data: {
-        userId: userId.toString(), // Ensure string conversion
-        userName: userName,
-        action: 'tracking_started',
-        timestamp: timestamp ? timestamp.toString() : new Date().toISOString() // Ensure string conversion
-      },
-      topic: 'admin_notifications'
-    };
-    
-
-    
-    const messagingResult = await admin.messaging().send(adminMessage);
-    
-  
+    // Send notification with Firebase retry logic
+    const messagingResult = await safeFirestoreOperation(async () => {
+      const adminMessage = {
+        notification: {
+          title: 'User Tracking Started',
+          body: `${userName} started location tracking`
+        },
+        data: {
+          userId: userId.toString(),
+          userName: userName,
+          action: 'tracking_started',
+          timestamp: timestamp ? timestamp.toString() : new Date().toISOString()
+        },
+        topic: 'admin_notifications'
+      };
+      
+      return await admin.messaging().send(adminMessage);
+    });
     
     res.status(200).json({
       success: true,
       message: 'Tracking started notification sent',
       user: userName,
-      messageId: messagingResult // Include the message ID in response
+      messageId: messagingResult
     });
     
   } catch (err) {
-    
     console.error('Full error stack:', err.stack);
     
-    // Check for specific Firebase errors
     if (err.code && err.code.startsWith('messaging/')) {
       console.error('🔥 Firebase Messaging Error Details:');
       console.error('Error code:', err.code);
       console.error('Error details:', err.details);
     }
     
-    // Check for MongoDB errors
     if (err.name === 'CastError') {
       console.error('🔍 MongoDB CastError - Invalid userId format');
     }
@@ -201,68 +311,55 @@ app.post('/api/tracking-started', async (req, res) => {
     });
   }
 });
-app.post('/api/tracking-stopped', async (req, res) => {
 
-  
+app.post('/api/tracking-stopped', async (req, res) => {
   const { userId, timestamp } = req.body;
   
- 
-  
   try {
-    
-    // Fetch user details from User model
     const user = await User.findById(userId, '-password');
-    
-  
-    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
     
     const userName = user.name || user.username || 'Unknown User';
     
-    
-    
-    // Send notification to admin topic
-    const adminMessage = {
-      notification: {
-        title: 'User Tracking Stopped',
-        body: `${userName} stopped location tracking`
-      },
-      data: {
-        userId: userId.toString(), // Ensure string conversion
-        userName: userName,
-        action: 'tracking_stopped',
-        timestamp: timestamp ? timestamp.toString() : new Date().toISOString() // Ensure string conversion
-      },
-      topic: 'admin_notifications'
-    };
- 
-    
-    const messagingResult = await admin.messaging().send(adminMessage);
+    // Send notification with Firebase retry logic
+    const messagingResult = await safeFirestoreOperation(async () => {
+      const adminMessage = {
+        notification: {
+          title: 'User Tracking Stopped',
+          body: `${userName} stopped location tracking`
+        },
+        data: {
+          userId: userId.toString(),
+          userName: userName,
+          action: 'tracking_stopped',
+          timestamp: timestamp ? timestamp.toString() : new Date().toISOString()
+        },
+        topic: 'admin_notifications'
+      };
+      
+      return await admin.messaging().send(adminMessage);
+    });
     
     console.log('✅ Notification sent successfully!');
- 
     
     res.status(200).json({
       success: true,
       message: 'Tracking stopped notification sent',
       user: userName,
-      messageId: messagingResult // Include the message ID in response
+      messageId: messagingResult
     });
     
   } catch (err) {
-  
     console.error('Full error stack:', err.stack);
     
-    // Check for specific Firebase errors
     if (err.code && err.code.startsWith('messaging/')) {
       console.error('🔥 Firebase Messaging Error Details:');
       console.error('Error code:', err.code);
       console.error('Error details:', err.details);
     }
     
-    // Check for MongoDB errors
     if (err.name === 'CastError') {
       console.error('🔍 MongoDB CastError - Invalid userId format');
     }
@@ -287,7 +384,7 @@ app.get('/users', verifyToken, async (req, res) => {
   }
 });
 
-// Get user statuses (admin only) - New endpoint
+// Get user statuses (admin only)
 app.get('/users/status', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
   try {
@@ -391,7 +488,7 @@ app.delete('/users/:userId', verifyToken, async (req, res) => {
   }
 });
 
-// Assign destination (admin only)
+// Assign destination (admin only) - WITH FIREBASE RETRY
 app.post('/destination', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
   
@@ -407,25 +504,29 @@ app.post('/destination', verifyToken, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Find existing destination and update, or create new one
     const destination = await Destination.findOneAndUpdate(
       { userId },
       { latitude, longitude },
       { new: true, upsert: true }
     );
-    const adminMessage = {
-      notification: {
-        title: 'Destination assigned',
-        body: `You have been assigned with a new destination`
-      },
-      data: {
-        action: 'destination_assigned',
-      },
-      topic: 'destination_notifications'
-    };
-    
-    const messagingResult = await admin.messaging().send(adminMessage);
-    console.log('✅ Destination notification sent successfully:', messagingResult);
+
+    // Send notification with Firebase retry logic
+    await safeFirestoreOperation(async () => {
+      const adminMessage = {
+        notification: {
+          title: 'Destination assigned',
+          body: `You have been assigned with a new destination`
+        },
+        data: {
+          action: 'destination_assigned',
+        },
+        topic: 'destination_notifications'
+      };
+      
+      const messagingResult = await admin.messaging().send(adminMessage);
+      console.log('✅ Destination notification sent successfully:', messagingResult);
+      return messagingResult;
+    });
     
     const message = destination.isNew ? 'Destination assigned' : 'Destination updated';
     res.status(201).json({ message });
@@ -560,7 +661,6 @@ app.post('/location', verifyToken, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Update or insert location using findOneAndUpdate with upsert
     const locationData = {
       userId,
       latitude,
@@ -571,7 +671,7 @@ app.post('/location', verifyToken, async (req, res) => {
     };
 
     await Location.findOneAndUpdate(
-      { userId }, // filter by userId to update the user's current location
+      { userId },
       locationData,
       { upsert: true, new: true }
     );
@@ -606,7 +706,6 @@ app.post('/location', verifyToken, async (req, res) => {
       historyData.timeTaken = calculateTimeTaken(locations);
     }
 
-    // This was already using upsert, so no change needed here
     await History.findOneAndUpdate(
       { userId, date },
       historyData,
@@ -651,6 +750,29 @@ function calculateTimeTaken(locations) {
   return `${diff.toFixed(2)} minutes`;
 }
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+// ============= START THE APPLICATION =============
+async function startServer() {
+  try {
+    // Initialize Firebase first
+    await startFirebase();
+    
+    // Start the Express server
+    app.listen(port, () => {
+      console.log(`🚀 Server running on port ${port}`);
+      console.log('🔥 Firebase Admin SDK ready with error recovery');
+    });
+  } catch (error) {
+    console.error('💥 Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Start the server
+startServer();
+
+// ============= EXPORT UTILITIES FOR YOUR ROUTES =============
+module.exports = {
+  safeFirestoreOperation,
+  withFirebaseRetry,
+  ensureFreshFirebaseToken
+};

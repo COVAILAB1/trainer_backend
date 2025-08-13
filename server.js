@@ -111,45 +111,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// ============= TEST FIREBASE ENDPOINT =============
-// Add this endpoint to test Firebase notifications
-app.post('/api/test-firebase', async (req, res) => {
-  console.log('Testing Firebase notification...');
-  
-  try {
-    const testMessage = {
-      notification: {
-        title: 'Test Notification',
-        body: 'Firebase Admin SDK is working correctly!'
-      },
-      data: {
-        test: 'true',
-        timestamp: new Date().toISOString()
-      },
-      topic: 'admin_notifications'
-    };
-    
-    console.log('Sending test message:', JSON.stringify(testMessage, null, 2));
-    
-    const result = await admin.messaging().send(testMessage);
-    
-    console.log('✅ Test notification sent successfully:', result);
-    
-    res.json({
-      success: true,
-      message: 'Test notification sent',
-      messageId: result
-    });
-    
-  } catch (error) {
-    console.error('❌ Test notification failed:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      code: error.code
-    });
-  }
-});
 
 // Login endpoint
 app.post('/login', async (req, res) => {
@@ -170,24 +131,17 @@ app.post('/login', async (req, res) => {
 
 // Tracking started endpoint (admin receives notification)
 app.post('/api/tracking-started', async (req, res) => {
-  console.log('=== TRACKING STARTED ENDPOINT ===');
-  console.log('Request body:', JSON.stringify(req.body, null, 2));
+
   
   const { userId, timestamp } = req.body;
   
-  // Debug: Check extracted values
-  console.log('Extracted userId:', userId);
-  console.log('Extracted timestamp:', timestamp);
-  console.log('userId type:', typeof userId);
-  console.log('timestamp type:', typeof timestamp);
+ 
   
   try {
-    console.log('Attempting to fetch user with ID:', userId);
     
     // Fetch user details from User model
     const user = await User.findById(userId, '-password');
     
-    console.log('User query result:', user ? 'User found' : 'User not found');
     if (user) {
       console.log('User details:', {
         id: user._id,
@@ -198,23 +152,16 @@ app.post('/api/tracking-started', async (req, res) => {
     }
     
     if (!user) {
-      console.log('❌ User not found in database');
       return res.status(404).json({ message: 'User not found' });
     }
     
     const userName = user.name || user.username || 'Unknown User';
-    console.log('Resolved userName:', userName);
-    
-    // Debug: Check admin messaging setup
-    console.log('Checking Firebase Admin setup...');
-    console.log('admin.messaging available:', typeof admin.messaging);
-    console.log('Firebase app initialized:', !!admin.apps.length);
-    
+
     // Send notification to admin topic
     const adminMessage = {
       notification: {
         title: 'User Tracking Started',
-        body: `${userName} (ID: ${userId}) started location tracking`
+        body: `${userName} started location tracking`
       },
       data: {
         userId: userId.toString(), // Ensure string conversion
@@ -225,13 +172,11 @@ app.post('/api/tracking-started', async (req, res) => {
       topic: 'admin_notifications'
     };
     
-    console.log('Admin message payload:', JSON.stringify(adminMessage, null, 2));
-    console.log('Attempting to send notification...');
+
     
     const messagingResult = await admin.messaging().send(adminMessage);
     
-    console.log('✅ Notification sent successfully!');
-    console.log('Firebase messaging result:', messagingResult);
+  
     
     res.status(200).json({
       success: true,
@@ -241,10 +186,87 @@ app.post('/api/tracking-started', async (req, res) => {
     });
     
   } catch (err) {
-    console.error('❌ TRACKING STARTED ERROR ❌');
-    console.error('Error type:', err.constructor.name);
-    console.error('Error message:', err.message);
-    console.error('Error code:', err.code);
+    
+    console.error('Full error stack:', err.stack);
+    
+    // Check for specific Firebase errors
+    if (err.code && err.code.startsWith('messaging/')) {
+      console.error('🔥 Firebase Messaging Error Details:');
+      console.error('Error code:', err.code);
+      console.error('Error details:', err.details);
+    }
+    
+    // Check for MongoDB errors
+    if (err.name === 'CastError') {
+      console.error('🔍 MongoDB CastError - Invalid userId format');
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error',
+      error: err.message,
+      errorCode: err.code
+    });
+  }
+});
+app.post('/api/tracking-stopped', async (req, res) => {
+
+  
+  const { userId, timestamp } = req.body;
+  
+ 
+  
+  try {
+    
+    // Fetch user details from User model
+    const user = await User.findById(userId, '-password');
+    
+    if (user) {
+      console.log('User details:', {
+        id: user._id,
+        name: user.name,
+        username: user.username,
+        email: user.email // Add other relevant fields you want to check
+      });
+    }
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    const userName = user.name || user.username || 'Unknown User';
+    
+    
+    
+    // Send notification to admin topic
+    const adminMessage = {
+      notification: {
+        title: 'User Tracking Stopped',
+        body: `${userName} stopped location tracking`
+      },
+      data: {
+        userId: userId.toString(), // Ensure string conversion
+        userName: userName,
+        action: 'tracking_stopped',
+        timestamp: timestamp ? timestamp.toString() : new Date().toISOString() // Ensure string conversion
+      },
+      topic: 'admin_notifications'
+    };
+ 
+    
+    const messagingResult = await admin.messaging().send(adminMessage);
+    
+    console.log('✅ Notification sent successfully!');
+ 
+    
+    res.status(200).json({
+      success: true,
+      message: 'Tracking stopped notification sent',
+      user: userName,
+      messageId: messagingResult // Include the message ID in response
+    });
+    
+  } catch (err) {
+  
     console.error('Full error stack:', err.stack);
     
     // Check for specific Firebase errors

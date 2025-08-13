@@ -520,7 +520,7 @@ app.post('/destination', verifyToken, async (req, res) => {
         data: {
           action: 'destination_assigned',
         },
-        topic: 'destination_notifications'
+        topic: `destination_${userId}`
       };
       
       const messagingResult = await admin.messaging().send(adminMessage);

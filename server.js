@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const admin = require('firebase-admin');
+const { CronJob } = require('cron');
 
 // Load environment variables
 require('dotenv').config(); // npm install dotenv
@@ -18,7 +19,7 @@ const serviceAccount ={
   "type": "service_account",
   "project_id": "trainertrack-e6238",
   "private_key_id": "9b496a765754492c521a3736205c8b2442665795",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDXN+CYonP3gVsE\nZxNp/3LzCxaKPTL9bAHHnk/WL2liHwoXr6Chb0qjc4XbV3tADz3kumclpkg1RFDI\n9pkZA6xbKaXXgnNU1ylvZA+a0g6XHHuuzQTnGh+zMo7yyq1semd8ybLEExGR0Rqd\n9uyuRdm8p/gfTzXrg357cDZ4WFXzXJovOrBWjbciEMjHQ4NL+TY/+PWZMmVQCX8a\n9Hv4DVQG1ZoFPjQTA1kAVtl5rMctEd/euzdPcc/o9vAtj4WVUh09FtIIGUlwsbtf\no51lQNSQKLkKMkBdc8cNM9v2wVPi7On5S+EPm8GshK1yqeJx5xpTjmZGGEOyucSs\npqyxkAhfAgMBAAECggEAF3fx52MLp0k1TiEZVl0zQTqLzi5HQahF92kVhqMr6DW/\nSX7u0rvKlVFTHuyGtaET3D3RYqMjy58z+f4eCsLCSDyd54bDodRGoe104CqYybSi\n7hhQOQ05uLZCLUqZp7MfVtW9xzDXISH+t4wGGijmyfI9Fdjy5cg0gixl3DCxyrQy\nqOoufjmb1RlFhybtCSuvjkVlEloJqbVaBOIBX+La+RFrYsVkzAsznkQom0F6W1KZ\nEJPQ60vaKqBetyC1qwGTJsicm+MS4p2Mnytrdddv9eSCBJVfIgSiAAWoZZE0LdVl\n8UiME4sxEBDyCgj2wSf9YBwrWee/55aGC+KpAC73QQKBgQDzB+xgDrZv/6coxvbz\nPljU8ccsdWfa3B5sPiZBPbktlaQYIhSF+TY7AuEPc91lhkrgwdhoFQeYHM7CD+Fn\ngLANr5p7jasyAPYJBduv0E5JaAVCWgHOk+nPmEHtCSjecC7vdbsGhsKVihi/gMJ0\nRX1yn5Q9ptWNk8tuzFxou0zhwQKBgQDitABeame+rpjjIkJ9dVKMnY8tt+j9IJQX\nIoOIKRA4JA4d/dufQUJIwysR0AC4y4OesT72BOM1CjwVtBko/51qi4GNwE/LZecI\nUKUazCJtKYTP+HtAG0G2quw4/9fWJctUhwXjZa4A3tf2yymnhRAQVbFaNvGwgKxU\nP998J2kyHwKBgGwsw68B/Xyeq9X/sd4Vi07Fi6UjYSXOwo/lnft+MNW0fMTtLntv\nsQ7VOj45kXtmKiAeyGeTrLytXe6NSQRcCIEe/8EtDt2EBf+AJwf7zUzpSyX8kD9W\nIUVw/S8324QfJRUbLzM5epU7Ucaz1loQsET7+Oz0PKv29B8OQbewXwlBAoGAHLYH\nRe3b7b5XBo0UNqdhKQXbWELucwBpQPTSC7CHqVSHpSy9X9H3/xcYoUziioTbyoFQ\nJABCdjkxmt4QQaz91ryMT9OHR49ETz1Ha7lmssSLWXtywI+zJttGx4E/aJOoyK/B\nAyehfeK7HzpjsB+eBTOVHoPO4Derm4/rUeH75KkCgYEAuQT+9tumKIzE8FmhiXL5\nnR8NT2qJ9RMxCCwnfwZ2oNA8aBd7hJ1Lzk311jNQI9iEmsWt4qsyL3qy41j95R4C\nff3MNkqv+p2UXdJBty/A0hQ/E10SZfmEGf94pxZEvDvtWUV5ERpWHGBHPERRmhuX\nIepIHS8yqEAx4kK7NSzZE0Q=\n-----END PRIVATE KEY-----\n",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDXN+CYonP3gVsE\nZxNp/3LzCxaKPTL9bAHHnk/WL2liHwoXr6Chb0qjc4XbV3tADz3kumclpkg1RFDI\n9pkZA6xbKaXXgnNU1ylvZA+a0g6XHHuuzQTnGh+zMo7yyq1semd8ybLEExGR0Rqd\n9uyuRdm8p/gfTzXrg357cDZ4WFXzXJovOrBWjbciEMjHQ4NL+TY/+PWZMmVQCX8a\n9Hv4DVQG1ZoFPjQTA1kAVtl5rMctEd/euzdPcc/o9vAtj4WVUh09FtIIGUlwsbtf\no51lQNSQKLkKMkBdc8cNM9v2wVPi7On5S+EPm8GshK1yqeJx5xpTjmZGGEOyucSs\npqyxkAhfAgMBAAECggEAF3fx52MLp0k1TiEZVl0zQTqLzi5HQahF92kVhqMr6DW/\nSX7u0rvKlVFTHuyGtaET3D3RYqMjy58z+f4eCsLCSDyd54bDodRGoe104CqYybSi\n7hhQOQ05uLZCLUqZp7MfVtW9xzDXISH+t4wGGijmyfI9Fdjy5cg0gixl3DCxyrQy\nqOoufjmb1RlFhybtCSuvjkVlEloJqbVaBOIBX+La+RFrYsVkzAsznkQom0F6W1KZ\nEJPQ60vaKqBetyC1qwGTJsicm+MS4p2Mnytrdddv9eSCBJVfIgSiAAWoZZE0LdVl\n8UiME4sxEBDyCgj2wSf9YBwrWee/55aGC+KpAC73QQKBgQDzB+xgDrZv/6coxvbz\nPljU8ccsdWfa3B5sPiZBPbktlaQYIhSF+TY7AuEPc91lhkrgwdhoFQeYHM7CD+Fn\ngLANr5p7jasyAPYJBduv0E5JaAVCWgHOk+nPmEHtCSjecC7vdbsGhsKVihi/gMJ0\nRX1yn5Q9ptWNk8tuzFxou0zhwQKBgQDitABeame+rpjjIkJ9dVKMnY8tt+j9IJQX\nIoOIKRA4JA4d/dufQUJIwysR0AC4y4OesT72BOM1CjwVtBko/51qi4GNwE/LZecI\nUKUazCJtKYTP+HtAG0G2quw4/9fWJctUhwXjZa4A3tf2yymnhRAQVbFaNvGwgKxU\nP998J2kyHwKBgGwsw68B/Xyeq9X/sd4Vi07Fi6UjYSXOwo/lnft+MNW0fMTtLntv\nsQ7VOj45kXtmKiAeyGeTrLytXe6NSQRcCIEe/8EtDt2EBf+AJwf7zUzpSyX8kD9W\nIUVw/S8324QfJRUbLzM5epU7Ucaz1loQsET7+Oz0PKv29B8OQbewXwlBAoGAHLYH\nRe3b7b5XBo0UNqdhKQXbWELucwBpQPTSC7CHqVSHpSy9X9H3/xcYoUziioTbyoFQ\nJABCdjkxmt4QQaz91ryMT9OHR49ETz1Ha7lmssSLWXtwI+zJttGx4E/aJOoyK/B\nAyehfeK7HzpjsB+eBTOVHoPO4Derm4/rUeH75KkCgYEAuQT+9tumKIzE8FmhiXL5\nnR8NT2qJ9RMxCCwnfwZ2oNA8aBd7hJ1Lzk311jNQI9iEmsWt4qsyL3qy41j95R4C\nff3MNkqv+p2UXdJBty/A0hQ/E10SZfmEGf94pxZEvDvtWUV5ERpWHGBHPERRmhuX\nIepIHS8yqEAx4kK7NSzZE0Q=\n-----END PRIVATE KEY-----\n",
   "client_email": "firebase-adminsdk-fbsvc@trainertrack-e6238.iam.gserviceaccount.com",
   "client_id": "117021301682543078913",
   "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -149,7 +150,56 @@ async function safeFirestoreOperation(operation) {
   return withFirebaseRetry(operation);
 }
 
+// ============= DAILY DESTINATION REMINDER FUNCTION =============
+async function sendDailyDestinationNotifications() {
+  const today = new Date().toISOString().split('T')[0];
+  console.log(`📅 Sending daily destination reminders for ${today}`);
 
+  try {
+    const destinations = await Destination.find({ date: today });
+    
+    if (!destinations.length) {
+      console.log('ℹ️ No destinations found for today');
+      return;
+    }
+
+    const userIds = [...new Set(destinations.map(d => d.userId))];
+
+    for (const userId of userIds) {
+      try {
+        const dest = destinations.find(d => d.userId === userId);
+        
+        if (!dest) continue;
+
+        const messagingResult = await safeFirestoreOperation(async () => {
+          const message = {
+            notification: {
+              title: 'Daily Destination Reminder',
+              body: 'You have a destination assigned for today'
+            },
+            data: {
+              action: 'destination_reminder',
+              latitude: dest.latitude.toString(),
+              longitude: dest.longitude.toString(),
+              date: dest.date
+            },
+            topic: `user_${userId}`  // Using user_{userId} as specified
+          };
+          
+          return await admin.messaging().send(message);
+        });
+
+        console.log(`✅ Reminder sent to user_${userId}:`, messagingResult);
+        
+      } catch (err) {
+        console.error(`❌ Error sending reminder to user ${userId}:`, err.message);
+      }
+    }
+    
+  } catch (err) {
+    console.error('❌ Error in daily reminders:', err);
+  }
+}
 
 // MongoDB connection
 mongoose.connect('mongodb+srv://covailabs1:dpBIwF4ZZcJQkgjA@cluster0.jr1ju8f.mongodb.net/trainer_track?retryWrites=true&w=majority&appName=Cluster0', {
@@ -474,15 +524,16 @@ app.delete('/users/:userId', verifyToken, async (req, res) => {
 });
 
 // Assign destination (admin only) - WITH FIREBASE RETRY
+// Assign destination (admin only) - WITH FIREBASE RETRY
 app.post('/destination', verifyToken, async (req, res) => {
   if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
-  
+
   try {
-    const { userId, latitude, longitude,date } = req.body;
+    const { userId, latitude, longitude, date } = req.body;
     console.log('Assign destination request:', req.body);
-    
-    if (!userId || !latitude || !longitude) {
-      return res.status(400).json({ message: 'userId, latitude, and longitude are required' });
+
+    if (!userId || !latitude || !longitude || !date) {
+      return res.status(400).json({ message: 'userId, latitude, longitude, and date are required' });
     }
 
     const user = await User.findById(userId);
@@ -490,37 +541,48 @@ app.post('/destination', verifyToken, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Ensure date is in the correct format (e.g., YYYY-MM-DD)
+    const formattedDate = new Date(date).toISOString().split('T')[0];
+    if (!formattedDate) {
+      return res.status(400).json({ message: 'Invalid date format' });
+    }
+
     const destination = await Destination.findOneAndUpdate(
-      { userId },
-      { latitude, longitude },
-      {date},
+      { userId, date: formattedDate }, // Match both userId and date
+      { latitude, longitude, date: formattedDate },
       { new: true, upsert: true }
     );
+
+    if (!destination) {
+      throw new Error('Failed to create or update destination');
+    }
 
     // Send notification with Firebase retry logic
     await safeFirestoreOperation(async () => {
       const adminMessage = {
         notification: {
           title: 'Destination assigned',
-          body: `You have been assigned with a new destination`
+          body: `You have been assigned a new destination for ${formattedDate}`
         },
         data: {
           action: 'destination_assigned',
+          latitude: latitude.toString(),
+          longitude: longitude.toString(),
+          date: formattedDate
         },
         topic: `destination_${userId}`
       };
-      
+
       const messagingResult = await admin.messaging().send(adminMessage);
       console.log('✅ Destination notification sent successfully:', messagingResult);
       return messagingResult;
-
     });
-    
+
     const message = destination.isNew ? 'Destination assigned' : 'Destination updated';
-    res.status(201).json({ message });
+    res.status(201).json({ message, destination: { userId, latitude, longitude, date: formattedDate } });
   } catch (err) {
     console.error('Assign destination error:', err);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -743,6 +805,14 @@ async function startServer() {
   try {
     // Initialize Firebase first
     await startFirebase();
+    
+    // Schedule daily reminder at 8 AM (using server timezone)
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const dailyJob = new CronJob('0 0 8 * * *', async () => {
+      await sendDailyDestinationNotifications();
+    }, null, true, timezone);
+    
+    console.log('⏰ Daily destination reminder scheduled at 8 AM every day');
     
     // Start the Express server
     app.listen(port, () => {

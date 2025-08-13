@@ -3,6 +3,10 @@
 .env.local
 .env.production
 
+# Firebase service account (if using file method)
+firebase-service-account.json
+*-firebase-adminsdk-*.json
+
 # Dependencies
 node_modules/
 

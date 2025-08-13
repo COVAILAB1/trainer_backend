@@ -6,7 +6,8 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 const { CronJob } = require('cron');
 require('dotenv').config();
-
+const axios = require('axios');
+const keepAliveUrl = 'https://https://trainer-backend-soj9.onrender.com/ping';
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -248,6 +249,20 @@ app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
+app.get('/ping', (req, res) => {
+  console.log(`🕒 Ping received at ${new Date().toISOString()}`);
+  res.status(200).send('Alive');
+});
+
+// Add keep-alive self-ping every 14 minutes
+setInterval(async () => {
+  try {
+    await axios.get(keepAliveUrl);
+    console.log(`🕒 Keep-alive ping sent at ${new Date().toISOString()}`);
+  } catch (error) {
+    console.error(`❌ Keep-alive ping failed: ${error.message}`);
+  }
+}, 14 * 60 * 1000);
 
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;

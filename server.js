@@ -1,34 +1,46 @@
+// ============= FIREBASE ADMIN SDK WITH ENVIRONMENT VARIABLES =============
 const express = require('express');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const admin = require('firebase-admin');
+
+// Load environment variables
+require('dotenv').config(); // npm install dotenv
+
 const app = express();
 const port = process.env.PORT || 3000;
-const secretKey = process.env.JWT_SECRET || 'tamil'; // Use environment variable for security
+const secretKey = process.env.JWT_SECRET || 'tamil';
 
-// ============= FIREBASE ADMIN SDK INITIALIZATION =============
-// Method 1: Using Service Account Key File (Recommended for development)
+// Firebase Admin SDK Initialization with Environment Variables
 try {
-  const serviceAccount = require('./firebase-service-account.json'); // Place your service account file in project root
-  
+  if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_PRIVATE_KEY || !process.env.FIREBASE_CLIENT_EMAIL) {
+    throw new Error('Missing Firebase environment variables');
+  }
+
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    projectId: serviceAccount.project_id, // This will be read from the service account file
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'), // Handle escaped newlines
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    }),
+    projectId: process.env.FIREBASE_PROJECT_ID,
   });
   
-  console.log('✅ Firebase Admin SDK initialized successfully');
-  console.log('Firebase project ID:', admin.app().options.projectId);
+  console.log('✅ Firebase Admin SDK initialized with environment variables');
+  console.log('Firebase project ID:', process.env.FIREBASE_PROJECT_ID);
   
 } catch (error) {
   console.error('❌ Firebase Admin SDK initialization failed:', error.message);
-  console.log('📝 Make sure to:');
-  console.log('1. Download your Firebase service account key from Firebase Console');
-  console.log('2. Save it as "firebase-service-account.json" in your project root');
-  console.log('3. Add it to .gitignore for security');
+  console.log('📝 Make sure to set these environment variables:');
+  console.log('FIREBASE_PROJECT_ID=your-project-id');
+  console.log('FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"');
+  console.log('FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com');
 }
 
+
+// Your existing code continues here...
 app.use(cors());
 app.use(express.json());
 

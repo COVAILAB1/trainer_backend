@@ -99,17 +99,44 @@ app.post('/login', async (req, res) => {
 
 // Tracking started endpoint (admin receives notification)
 app.post('/api/tracking-started', async (req, res) => {
+  console.log('=== TRACKING STARTED ENDPOINT ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  
   const { userId, timestamp } = req.body;
   
+  // Debug: Check extracted values
+  console.log('Extracted userId:', userId);
+  console.log('Extracted timestamp:', timestamp);
+  console.log('userId type:', typeof userId);
+  console.log('timestamp type:', typeof timestamp);
+  
   try {
+    console.log('Attempting to fetch user with ID:', userId);
+    
     // Fetch user details from User model
     const user = await User.findById(userId, '-password');
     
+    console.log('User query result:', user ? 'User found' : 'User not found');
+    if (user) {
+      console.log('User details:', {
+        id: user._id,
+        name: user.name,
+        username: user.username,
+        email: user.email // Add other relevant fields you want to check
+      });
+    }
+    
     if (!user) {
+      console.log('❌ User not found in database');
       return res.status(404).json({ message: 'User not found' });
     }
     
     const userName = user.name || user.username || 'Unknown User';
+    console.log('Resolved userName:', userName);
+    
+    // Debug: Check admin messaging setup
+    console.log('Checking Firebase Admin setup...');
+    console.log('admin.messaging available:', typeof admin.messaging);
     
     // Send notification to admin topic
     const adminMessage = {
@@ -118,29 +145,56 @@ app.post('/api/tracking-started', async (req, res) => {
         body: `${userName} (ID: ${userId}) started location tracking`
       },
       data: {
-        userId: userId,
+        userId: userId.toString(), // Ensure string conversion
         userName: userName,
         action: 'tracking_started',
-        timestamp: timestamp
+        timestamp: timestamp.toString() // Ensure string conversion
       },
       topic: 'admin_notifications'
     };
-
-    await admin.messaging().send(adminMessage);
     
+    console.log('Admin message payload:', JSON.stringify(adminMessage, null, 2));
+    console.log('Attempting to send notification...');
+    
+    const messagingResult = await admin.messaging().send(adminMessage);
+    
+    console.log('✅ Notification sent successfully!');
+    console.log('Firebase messaging result:', messagingResult);
     
     // If you have a TrackingSession model
     // await TrackingSession.create(trackingSession);
     
-    res.status(200).json({ 
-      success: true, 
+    res.status(200).json({
+      success: true,
       message: 'Tracking started notification sent',
-      user: userName 
+      user: userName,
+      messageId: messagingResult // Include the message ID in response
     });
     
   } catch (err) {
-    console.error('Tracking started error:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('❌ TRACKING STARTED ERROR ❌');
+    console.error('Error type:', err.constructor.name);
+    console.error('Error message:', err.message);
+    console.error('Error code:', err.code);
+    console.error('Full error stack:', err.stack);
+    
+    // Check for specific Firebase errors
+    if (err.code && err.code.startsWith('messaging/')) {
+      console.error('🔥 Firebase Messaging Error Details:');
+      console.error('Error code:', err.code);
+      console.error('Error details:', err.details);
+    }
+    
+    // Check for MongoDB errors
+    if (err.name === 'CastError') {
+      console.error('🔍 MongoDB CastError - Invalid userId format');
+    }
+    
+    res.status(500).json({ 
+      message: 'Server error',
+      error: err.message,
+      errorCode: err.code
+    });
   }
 });
 

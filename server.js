@@ -12,28 +12,17 @@ require('dotenv').config(); // npm install dotenv
 const app = express();
 const port = process.env.PORT || 3000;
 const secretKey = process.env.JWT_SECRET || 'tamil';
-
-const serviceAccount = {
-  "type": "service_account",
-  "project_id": "trainertrack-e6238",
-  "private_key_id": "09dc93aebd38801182c849f1849e5b433a5a76ad",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC6sn4+i50bojET\nZ2c9nQAayxA+K1J23cHkF9Oyu6K+p9pLicUbsEavk9RBMoj6n4TFD1T4v96+2SC5\nTC9U1PPRMwzrD/uqhMcMqC47hv+GgVwX2huovupHejsTUX/EVodXtyA5/Yi2cw9u\nhCewfMIQe1274DAKiiP9XOloCCgABWQBD2TjrVE78Cw95Wtb9YMLjzs6fCM8WHH6\nYgzpe9MoOFGAPWFVQJ8ruIoY9BZgrE5xN06SnVgiQns9gCZu0ecLBGhvGd7Czx8T\ngq2Qpvo3EbS0uoAWMq7r76SDHCnV8KtB7UhzOqw9I0Ed/QDrR/iCc1DzdTw1LQzA\nrtuOsxcZAgMBAAECggEAFC8vw6iRtt77Rg0l/eTrUdo+InCJ2PjK6XNzg2VymAD6\n8nN9xEtzqvAVMKrLYSgtoSXyEnYg+XptRadBTz86MHX/2aqH04TJJdrJa81hsxup\ndpkxqBXi65EhEaq8IOCXf5HYebiJxyrrok/GoDeuvfwucz1OyFbswuvAfssx8uVy\neJtGri7IoEHfExPVnkTfGnTFo+m1kpNPxk1X+sxgFJ6or8FHGc0xhfxw6+/fm21z\nQx7VRkC4Mo9mlMTXHBqucUAOE2mR+SEiDMbr1CfdYNe8TIL7lEysYO3NE0d4FcAe\nGnf4Yfst0V2NFZgHtOMY1w6QZPv+/bkr5flk7pjwIQKBgQD+7DYU03HDdgCjqqfi\nAqjLAiSyJfxK/JV3QqUZv/OdEkvPgPG0pYtS7KCdtf6m8NdAR6I07NfYkn0Kc0vQ\nv3ElhaywPfVRSCZAwJk4gEqLh6M7qwawEfngx1p4LzXk/cjmLMMUfWAiwSEyabEX\nBEndmOIOUR82usc53A3Sdu1poQKBgQC7fHjVT4V/b9O++MxXPsoC7bQvPkfxIgRD\nmAiY9OdhKs/1PCL3BJ0nv3Z7HdNNvjmSwoCfUuDyJ10Ef/Vj6LdKvStW0hvtEcSo\n+uTYxwt1JAMp8XiXSRdvwtn+OfusGkfnh73rgHsL0xQxP8QkOGlNKQHpypXLB1et\nwSIwNY/qeQKBgQCxxPt5znH5AmMzvyBP5dbbquT4LrEfgcChaCJGMKusD0Q6sgrc\nFM1xyH3BPVcWB8Gzm8Cr87YZ2x3Dmd929OnsZqmkRbC7O/shEK5Izn4tiyrzwzJo\nukBs1dhrE1EcHTZp/TEVKtFNqyyBQV8zU9RG6gRKQ5vmyJ2B5cjlyfWJwQKBgCqD\nji7oql/8bqqWZle+UDabykkQOWYPjaH6PrDYkAMznxZ//XnAHRbfTrGaUMkHQqzp\n2BrIw2OF04zqqy1tnuqevM4iNNzsM4kR44TYlduJQAJp1CuSEnNwXthMM6qSBw4U\ndNeLOduzkJeeWw7Pj+lETD/EhXUVhCdNbUA7VRgZAoGBAKV784qeTYjxg3PpeqY3\nVVWU6mG0svGL694V343xpbvy0RJDy2zlpQ/67HALwn/suQJntVXi5F9kSqM6mSXi\nzhg4DuaiEwMu598RwXzGmMuVqa9N4/2WrrTNRLBaggi5ZuqDsCKOZDEP9j3hA2fQ\nnUJhV5Tx8/BrTM8uh4wcj/2O\n-----END PRIVATE KEY-----\n",
-  "client_email": "firebase-adminsdk-fbsvc@trainertrack-e6238.iam.gserviceaccount.com",
-  "client_id": "117021301682543078913",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40trainertrack-e6238.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-};
-
-// Initialize Firebase Admin with the service account
 try {
   if (!admin.apps.length) {
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      }),
+      projectId: process.env.FIREBASE_PROJECT_ID,
     });
-    console.log('✅ Firebase Admin initialized successfully with direct JSON');
+    console.log('✅ Firebase Admin initialized securely');
   }
 } catch (error) {
   console.error('❌ Firebase initialization failed:', error);

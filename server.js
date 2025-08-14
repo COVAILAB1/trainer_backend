@@ -25,7 +25,7 @@ async function syncSystemTime(maxRetries = 3) {
   const timeApis = [
     'http://worldtimeapi.org/api/timezone/Etc/UTC',
     'https://time.google.com',
-    'http://api.timezonedb.com/v2.1/get-time?key=92A1NWPV4QG5&format=json&by=zone&zone=Etc/UTC'
+    'http://api.timezonedb.com/v2.1/get-time-zone?key=92A1NWPV4QG5&format=json&by=zone&zone=Etc/UTC'
   ];
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {

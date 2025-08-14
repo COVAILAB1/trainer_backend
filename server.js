@@ -22,10 +22,11 @@ global.FIREBASE_DISABLED = false;
 
 async function syncSystemTime(maxRetries = 3) {
   const debugPrefix = `[${new Date().toISOString()}] [SyncSystemTime]`;
+  const timezonedbKey = process.env.TIMEZONEDB_API_KEY || '92A1NWPV4QG5'; // Fallback for local testing
   const timeApis = [
     'http://worldtimeapi.org/api/timezone/Etc/UTC',
     'https://time.google.com',
-    'http://api.timezonedb.com/v2.1/get-time-zone?key=92A1NWPV4QG5&format=json&by=zone&zone=Etc/UTC'
+    `http://api.timezonedb.com/v2.1/get-time?key=${timezonedbKey}&format=json&by=zone&zone=Etc/UTC`
   ];
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -37,7 +38,20 @@ async function syncSystemTime(maxRetries = 3) {
           throw new Error(`HTTP error: ${response.status}`);
         }
         const timeData = await response.json();
-        const correctTime = new Date(timeData.datetime || timeData.utc_datetime);
+        let correctTime;
+        if (api.includes('timezonedb.com')) {
+          // TimezoneDB 'get-time' returns 'timestamp' in seconds
+          if (!timeData.timestamp) {
+            throw new Error('Invalid TimezoneDB response: missing timestamp');
+          }
+          correctTime = new Date(timeData.timestamp * 1000);
+        } else {
+          // worldtimeapi.org and time.google.com use 'datetime' or 'utc_datetime'
+          correctTime = new Date(timeData.datetime || timeData.utc_datetime);
+        }
+        if (isNaN(correctTime.getTime())) {
+          throw new Error('Invalid date parsed from response');
+        }
         const systemTime = new Date();
         const timeDiff = Math.abs(correctTime.getTime() - systemTime.getTime());
         console.log(`${debugPrefix} Time sync successful: difference=${timeDiff}ms, correctTime=${correctTime}, systemTime=${systemTime}`);
@@ -342,26 +356,16 @@ setInterval(async () => {
 }, 14 * 60 * 1000);
 
 app.post('/login', async (req, res) => {
-  const debugPrefix = `[${new Date().toISOString()}] [Login]`;
   const { username, password } = req.body;
   try {
-    console.log(`${debugPrefix} Attempting login for username: ${username}`);
     const user = await User.findOne({ username });
-    if (!user) {
-      console.warn(`${debugPrefix} User not found: ${username}`);
+    if (!user || !await bcrypt.compare(password, user.password)) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      console.warn(`${debugPrefix} Invalid password for username: ${username}`);
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-    console.log(`${debugPrefix} Generating JWT for userId: ${user._id}`);
-    const token = jwt.sign({ userId: user._id, isAdmin: user.isAdmin }, secretKey, { expiresIn: '1h' });
-    console.log(`${debugPrefix} Login successful for username: ${username}`);
+    const token = jwt.sign({ userId: user._id, isAdmin: user.isAdmin }, secretKey);
     res.json({ userId: user._id, token, isAdmin: user.isAdmin });
   } catch (err) {
-    console.error(`${debugPrefix} Login error: ${err.message}, stack: ${err.stack}`);
+    console.error('Login error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });

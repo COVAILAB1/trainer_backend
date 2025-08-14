@@ -7,18 +7,18 @@ const admin = require('firebase-admin');
 const { CronJob } = require('cron');
 require('dotenv').config();
 const axios = require('axios');
-const keepAliveUrl = 'https://https://trainer-backend-soj9.onrender.com/ping';
+const keepAliveUrl = 'https://trainer-backend-soj9.onrender.com/ping';
 const app = express();
 app.use(cors());
 app.use(express.json());
 const port = process.env.PORT || 3000;
 const secretKey = process.env.JWT_SECRET || 'tamil';
 
-const serviceAccount = {
+const serviceAccount ={
   "type": "service_account",
   "project_id": "trainertrack-e6238",
-  "private_key_id": "16bfe1c5002e1beabfc732f5192787a6ddb15c46",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDA7WoB00N/LYuy\n1CbqLOW53sSL8uZFjrVutabCZmY+BLzNPVPjlskCxDsvBEtIhoUwTkuw4wO+xbZH\nW/lUkZfdqXF095DYKnrtNcO+mc70tia4auNh1d6cUrmpzu8XkoQFm5FdgU7GgnsK\n+MUMG7f/cLIVDeLkD1RnEhVioBffn6TXS6j/zeV+giOdQmjB70DFWkCftOg39LIN\nIp+ESZwhKCkCfSJ3gbFXyTk/x96M8ycrlNUFeER+wzPFrV6IKZQnTcp/t15xVouC\n67Sk9Ke5leC3LjsX3w7yhQKyGBBayeh2SCJSlDJ9QF2kjDXysGjtPCOirI6+ea7N\nhIsVQa9jAgMBAAECggEAL/FPrJBxb4ND+faajQsHM39WXGjKLHLgR1jAzgJgWf0X\nZfFdjWsFHLji9DYe9zDmnDB4wsZHQfsj5uvGM+vST3UyCp0S04UK8zOvJwhV054I\nVT/KrZ9WKIauOLKB29u/Dx2vrArcJpx6MynK3c1tlf7NYkoHHiFpGgv2YIHkLN+y\nQ5pZTXINy0zuEOLx4woaLxxLv2h+fk9xWhbCcpuHTnndDqcCYmvd9WsxNa3LRQIQ\nYLT0wwDSgERW2ySGXivNUtfWDa+2oo2W5ZeTL94S4q5bF7iXOgHFTzOH5gte4aCm\nWo6lhnteGE7G6Xpop8Qk3gCaqhovkVdOjrhRao/8kQKBgQD0hYqdeZ4EFd3MG/g/\nEALgmAnsxAImsjxwPD3IyTDgrYwsUFbPh7EzDB4AX2mh4hpCeEjfkk/4laUXnSCA\nefSWgYhw/n43XEWuuqkcpWh3Xsqp0K8o8cTjtPZFvwIUxh+7Y7sehApNdSYy0p0K\nX7GVsBIK50LM3SUrP1eZy4UK1QKBgQDJ+9sPvXcZgR7twBZHJxfV1J6YRaQDV0lp\nb28oYqlpVdm9HrxUfHbbhUbUo2TbAhkpkashTnnKruGS+I3ZhHlobrRj8yCADDpu\not91FE7vjIpsmGjENFwCy70Xh3wkTwlvArC6KUE7db6RrmuBbcKcgMO5TneISwrj\nOI5V4D19VwKBgGabhzBPsYRLXLhi4EguQtbWVgvZsIFmd8AtN0wDSRRvHwwVZmhN\nq4kdQ5WqdBwvUg+khAf1UMOioBWJpPLkukNR9dxcnsBCYydQQti3fF/jEi4yWN5Y\nneNjs5hO7+Ohw/0Re5rxk5UvXKklAisxPsbujJOwubJX9lnwiaUK5zhFAoGBALtn\nKDsUaVqKiK3CmWjvBphpK7TQeHp5FC31LEdmMxT+iIWF7OreiFDo+Wz1JPBmo/4D\nn6nJbAr382cvojz9Qr/4ZvqNa8wijFx2VaoFa6+q0Awt5JaWlgAqFImuNSpjArey\n4VH4UQPgHS6BjFGMCxK2DeLywMj+B14G7VkUMzkFAoGBAIYmcSkMeAgx9lbmJ5dD\nZPnXz/defHaDrpYv7aXpvuRxyVNt2OfCidaqqKST0PHzWi6OJ6pOkJJZRlzPHLSc\nluTolbf4/A3MHE7BxzU1hwZ/1I09tKnmu3BLYan90a0ImkdnmuQuYTeb5RagR+Vm\nDhiVrYX1wzjPqOg52W9+S0Ri\n-----END PRIVATE KEY-----\n",
+  "private_key_id": "54f495ccf252380a0fcb87397cba901bec889db1",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCpsctAct58x17Q\nWp4+m9Z570Ec5fagDo2mbzb8eZC+IT5kYd2dQ1KfmdIm7mRzUjxIW1EUA2TXzop7\n6upeq2Yf0JqNTN4UmT9Zz0ha0JkIXShmdP8hTxlmAe9WaVT/sfKAhbzary/zwFYc\nymaT3NmVijMnOSOv/vTmzHcgA8qUWEX0QyrHOP5m5ObLqF6+CVKFCXxlp7bcZhkp\nQkUIIQHlMs1IPUNjB2OyjGfqFPu4419887Cg4s/oLlmtCtQ3vGKB7HzZPofWDbQB\nIvEIlSU5iYOsfCOFGyIYJCe48KWSeGXCpmKp2I+fLOWQrqC4FFLp2XO7gRU5/O6i\nSu6jME4vAgMBAAECggEAE/mEBaEVLrY/zeIXeyKC5jV916CmHYRjs3H8lKQxSoAa\nmlxUEX0+44ngDTRwieE7NqqGalxVPtCRcoazcdNWdmuVVbP09uhsZu5EWRRG1I+K\nquIeCgCylP79+jufMBNKiqBeG5Zq3D6z+Y2a8iVuo0XyQYKzVbXQLr67TanElcjL\nwHxO+14wRorkHvgrxcYCuchPebdMwFYdNpbUqEolmgkIKLfB3qWmdWFxYlQgs+Ok\nKtT76bBEHoKAbKBYI8foSUzhz3lmkzyxGHJ0xO8MX3p5SfahCXg8WgU5qwdeHFbX\n7M/HdLF77qIC6/2WPAehYLXHXZokGaydBQlkRiCE8QKBgQDeDe2aN12nMBn5navk\nbEUW/FvosD/uN/NqiHJLHurxhyM2fkdLKbokoc2AyItvEPqxgihUOIpfKiKM0FwT\nf4+DJJggR0o9Guc9WgkLBB4HNq/EW3yvgYIEh5BHJE6bl/Sp8IY5hDjrergFUjY/\nsMvihJDzSUKfm3+siniUlCk9iQKBgQDDosSCOcfF+71xQq8ZV/q0qns0ZoVnBjRP\nL9w/GQEJtpxPG0n2o8DCf8Cz4PyRSkhccITDSro7WuyQdgyV6BqYr0p1LnsWcYxU\nkTEcGJTaEzdCXxqtCJxtyVaHUM066f1vtLYgNzEGpIIZLaaTe3qoEZi36GjyM577\n+UchZ+G39wKBgQDd6X91qjUe+zRKQGdjfUxCn2rejR0m3aWW5suKBVj4jXwEXoiz\nNf0/1K/CLykhkw9mTFQvbt3iIwKqRSRvnAB5KB4bzAMGNBe6OXtmFfRIcz+O9XsT\nDlM4YZ4varpgRqkNGEGbw2b69gZn0vRCDFaFhsQxThqV1VnvveapXbQlOQKBgQC8\na7f39M6D0MHUo/Ug46uC9e9TuKojX8ZhvibSXrKxOD+zsQS7l1u/+GsQ1FBtXq3y\n2iwEK6TSJfBR8mCMwM9c3vdHhUzngNU3Xd9+v+4dWwSN2CtJHFINKy07hocjhtmh\nDNuci4ucajUjKuSUhwjLdqcv+ZeaLj2hUaVAd1zeYQKBgDbXqT5M793oxma94dA0\no4qoSwS2I//H06R1HJwh6g1+26IYoncHzuJBDVRhKDI0Ka7R06gPlFcVRs8VXFKn\nLMWJbhcDB1TXfO0oCLCglPm51v2P6wmIRQ9fN+eY3I4IUIFTUxgii8sngYjxdrJR\nOW3BTYWWZiMO/owD5KlQJ0q9\n-----END PRIVATE KEY-----\n",
   "client_email": "firebase-adminsdk-fbsvc@trainertrack-e6238.iam.gserviceaccount.com",
   "client_id": "103781155809937938716",
   "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -32,76 +32,95 @@ let initTime = Date.now();
 global.FIREBASE_DISABLED = false;
 
 async function syncSystemTime() {
+  const debugPrefix = `[${new Date().toISOString()}] [SyncSystemTime]`;
   try {
-    console.log('🕐 Attempting to sync system time...');
+    console.log(`${debugPrefix} Starting time sync with worldtimeapi.org`);
     const response = await fetch('http://worldtimeapi.org/api/timezone/Etc/UTC');
     const timeData = await response.json();
     const correctTime = new Date(timeData.datetime);
     const systemTime = new Date();
     const timeDiff = Math.abs(correctTime.getTime() - systemTime.getTime());
-    console.log(`⏰ Time difference: ${timeDiff}ms`);
+    console.log(`${debugPrefix} Time sync successful: difference=${timeDiff}ms, correctTime=${correctTime}, systemTime=${systemTime}`);
     if (timeDiff > 30000) {
-      console.warn('⚠️ Significant time drift detected!');
+      console.warn(`${debugPrefix} Significant time drift detected: ${timeDiff}ms`);
     }
     return { timeDiff, correctTime, systemTime };
   } catch (error) {
-    console.warn('⚠️ Time sync check failed:', error.message);
+    console.error(`${debugPrefix} Time sync failed: ${error.message}, stack: ${error.stack}`);
     return null;
   }
 }
 
 async function initializeFirebaseWithRetry(maxRetries = 3) {
+  const debugPrefix = `[${new Date().toISOString()}] [InitializeFirebase]`;
+  console.log(`${debugPrefix} Starting Firebase initialization`);
   await syncSystemTime();
   for (let i = 0; i < maxRetries; i++) {
     try {
-      admin.apps.forEach(app => app.delete());
-      console.log(`🔥 Initializing Firebase (attempt ${i + 1}/${maxRetries})...`);
+      console.log(`${debugPrefix} Attempt ${i + 1}/${maxRetries} to initialize Firebase`);
+      admin.apps.forEach(app => {
+        console.log(`${debugPrefix} Deleting existing Firebase app: ${app.name}`);
+        app.delete();
+      });
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
       });
+      console.log(`${debugPrefix} Fetching Firebase access token`);
       await Promise.race([
         admin.app().options.credential.getAccessToken(),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Token fetch timeout')), 10000))
       ]);
-      console.log(`✅ Firebase Admin initialized successfully`);
+      console.log(`${debugPrefix} Firebase Admin initialized successfully`);
       initTime = Date.now();
       global.FIREBASE_DISABLED = false;
       return true;
     } catch (error) {
-      console.error(`❌ Firebase init attempt ${i + 1} failed: ${error.message}`);
+      console.error(`${debugPrefix} Firebase init attempt ${i + 1} failed: ${error.message}, stack: ${error.stack}`);
       if (i === maxRetries - 1) {
-        console.warn('🚫 Disabling Firebase due to repeated failures');
+        console.warn(`${debugPrefix} Disabling Firebase due to repeated failures`);
         global.FIREBASE_DISABLED = true;
         return false;
       }
+      console.log(`${debugPrefix} Waiting ${2000 * (i + 1)}ms before retry`);
       await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
     }
   }
 }
 
 async function ensureFreshFirebaseToken() {
-  if (global.FIREBASE_DISABLED) return false;
+  const debugPrefix = `[${new Date().toISOString()}] [EnsureFreshFirebaseToken]`;
+  if (global.FIREBASE_DISABLED) {
+    console.warn(`${debugPrefix} Skipped - Firebase is disabled`);
+    return false;
+  }
   try {
+    console.log(`${debugPrefix} Attempting to refresh Firebase token`);
     await admin.app().options.credential.getAccessToken(true);
+    console.log(`${debugPrefix} Token refreshed successfully`);
     return true;
   } catch (error) {
-    console.warn('🔄 Token refresh failed:', error.message);
+    console.error(`${debugPrefix} Token refresh failed: ${error.message}, stack: ${error.stack}`);
     global.FIREBASE_DISABLED = true;
     return false;
   }
 }
 
 async function withFirebaseRetry(operation, maxRetries = 3) {
+  const debugPrefix = `[${new Date().toISOString()}] [WithFirebaseRetry]`;
   if (global.FIREBASE_DISABLED) {
-    console.warn('⚠️ Firebase operation skipped - Firebase is disabled');
+    console.warn(`${debugPrefix} Firebase operation skipped - Firebase is disabled`);
     return null;
   }
   for (let i = 0; i < maxRetries; i++) {
     try {
-      return await operation();
+      console.log(`${debugPrefix} Attempt ${i + 1}/${maxRetries} for Firebase operation`);
+      const result = await operation();
+      console.log(`${debugPrefix} Firebase operation successful`);
+      return result;
     } catch (error) {
+      console.error(`${debugPrefix} Operation attempt ${i + 1} failed: ${error.message}, stack: ${error.stack}`);
       if ((error.message.includes('invalid_grant') || error.message.includes('Invalid JWT') || error.message.includes('credential')) && i < maxRetries - 1) {
-        console.log(`🔄 Retry ${i + 1} after credential error`);
+        console.log(`${debugPrefix} Credential error detected, retrying after reinitialization`);
         await initializeFirebaseWithRetry();
         await new Promise(resolve => setTimeout(resolve, 1000));
         continue;
@@ -112,55 +131,79 @@ async function withFirebaseRetry(operation, maxRetries = 3) {
 }
 
 function setupAutomaticTokenRefresh() {
+  const debugPrefix = `[${new Date().toISOString()}] [SetupAutomaticTokenRefresh]`;
+  console.log(`${debugPrefix} Setting up automatic Firebase token refresh every 20 minutes`);
   setInterval(async () => {
     if (!global.FIREBASE_DISABLED) {
-      console.log('🔄 Refreshing Firebase token...');
+      console.log(`${debugPrefix} Initiating scheduled token refresh`);
       const success = await ensureFreshFirebaseToken();
-      console.log(success ? '✅ Token refreshed successfully' : '❌ Token refresh skipped');
+      console.log(`${debugPrefix} Token refresh ${success ? 'successful' : 'skipped'}`);
+    } else {
+      console.warn(`${debugPrefix} Token refresh skipped - Firebase is disabled`);
     }
   }, 20 * 60 * 1000);
 }
 
 async function startFirebase() {
+  const debugPrefix = `[${new Date().toISOString()}] [StartFirebase]`;
+  console.log(`${debugPrefix} Starting Firebase initialization process`);
   const success = await initializeFirebaseWithRetry();
   if (success) {
+    console.log(`${debugPrefix} Firebase initialized successfully at: ${new Date().toISOString()}`);
     setupAutomaticTokenRefresh();
-    console.log('📊 Firebase initialized at:', new Date().toISOString());
   } else {
-    console.warn('⚠️ Starting server without Firebase');
+    console.warn(`${debugPrefix} Starting server without Firebase`);
   }
 }
 
 process.on('unhandledRejection', async (error) => {
+  const debugPrefix = `[${new Date().toISOString()}] [UnhandledRejection]`;
   if (error.message?.includes('invalid_grant')) {
-    console.error('🚨 JWT signature error detected:', new Date().toISOString());
+    console.error(`${debugPrefix} JWT signature error detected: ${error.message}, stack: ${error.stack}`);
     global.FIREBASE_DISABLED = true;
     await initializeFirebaseWithRetry();
+  } else {
+    console.error(`${debugPrefix} Unhandled rejection: ${error.message}, stack: ${error.stack}`);
   }
 });
 
 async function safeFirestoreOperation(operation) {
-  return withFirebaseRetry(operation);
+  const debugPrefix = `[${new Date().toISOString()}] [SafeFirestoreOperation]`;
+  console.log(`${debugPrefix} Initiating Firestore operation`);
+  try {
+    const result = await withFirebaseRetry(operation);
+    console.log(`${debugPrefix} Firestore operation completed successfully`);
+    return result;
+  } catch (error) {
+    console.error(`${debugPrefix} Firestore operation failed: ${error.message}, stack: ${error.stack}`);
+    throw error;
+  }
 }
 
 async function sendDailyDestinationNotifications() {
+  const debugPrefix = `[${new Date().toISOString()}] [SendDailyDestinationNotifications]`;
   if (global.FIREBASE_DISABLED) {
-    console.warn('⚠️ Daily notifications skipped - Firebase is disabled');
+    console.warn(`${debugPrefix} Daily notifications skipped - Firebase is disabled`);
     return;
   }
   const today = new Date().toISOString().split('T')[0];
-  console.log(`📅 Sending daily destination reminders for ${today}`);
+  console.log(`${debugPrefix} Sending daily destination reminders for ${today}`);
   try {
     const destinations = await Destination.find({ date: today });
     if (!destinations.length) {
-      console.log('ℹ️ No destinations found for today');
+      console.log(`${debugPrefix} No destinations found for today`);
       return;
     }
     const userIds = [...new Set(destinations.map(d => d.userId))];
+    console.log(`${debugPrefix} Found ${userIds.length} unique users with destinations`);
     for (const userId of userIds) {
       const dest = destinations.find(d => d.userId === userId);
-      if (!dest) continue;
+      if (!dest) {
+        console.warn(`${debugPrefix} No destination found for user ${userId}`);
+        continue;
+      }
       try {
+        console.log(`${debugPrefix} Preparing notification for user_${userId}`);
         const messagingResult = await safeFirestoreOperation(async () => {
           const message = {
             notification: {
@@ -175,17 +218,18 @@ async function sendDailyDestinationNotifications() {
             },
             topic: `user_${userId}`
           };
+          console.log(`${debugPrefix} Sending notification to user_${userId}`);
           return await admin.messaging().send(message);
         });
         if (messagingResult) {
-          console.log(`✅ Reminder sent to user_${userId}:`, messagingResult);
+          console.log(`${debugPrefix} Reminder sent successfully to user_${userId}: ${messagingResult}`);
         }
       } catch (err) {
-        console.error(`❌ Error sending reminder to user ${userId}:`, err.message);
+        console.error(`${debugPrefix} Error sending reminder to user_${userId}: ${err.message}, stack: ${err.stack}`);
       }
     }
   } catch (err) {
-    console.error('❌ Error in daily reminders:', err);
+    console.error(`${debugPrefix} Error in daily reminders: ${err.message}, stack: ${err.stack}`);
   }
 }
 
@@ -235,10 +279,18 @@ const historySchema = new mongoose.Schema({
 const History = mongoose.model('History', historySchema);
 
 const verifyToken = (req, res, next) => {
+  const debugPrefix = `[${new Date().toISOString()}] [VerifyToken]`;
   const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ message: 'No token provided' });
+  if (!token) {
+    console.warn(`${debugPrefix} No token provided in request`);
+    return res.status(401).json({ message: 'No token provided' });
+  }
   jwt.verify(token, secretKey, (err, decoded) => {
-    if (err) return res.status(401).json({ message: 'Invalid token' });
+    if (err) {
+      console.error(`${debugPrefix} Invalid token: ${err.message}, stack: ${err.stack}`);
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+    console.log(`${debugPrefix} Token verified successfully for userId: ${decoded.userId}`);
     req.userId = decoded.userId;
     req.isAdmin = decoded.isAdmin;
     next();
@@ -250,41 +302,59 @@ app.use((req, res, next) => {
   next();
 });
 app.get('/ping', (req, res) => {
-  console.log(`🕒 Ping received at ${new Date().toISOString()}`);
+  console.log(`[${new Date().toISOString()}] Ping received`);
   res.status(200).send('Alive');
 });
 
 // Add keep-alive self-ping every 14 minutes
 setInterval(async () => {
+  const debugPrefix = `[${new Date().toISOString()}] [KeepAlive]`;
   try {
+    console.log(`${debugPrefix} Sending keep-alive ping`);
     await axios.get(keepAliveUrl);
-    console.log(`🕒 Keep-alive ping sent at ${new Date().toISOString()}`);
+    console.log(`${debugPrefix} Keep-alive ping successful`);
   } catch (error) {
-    console.error(`❌ Keep-alive ping failed: ${error.message}`);
+    console.error(`${debugPrefix} Keep-alive ping failed: ${error.message}, stack: ${error.stack}`);
   }
 }, 14 * 60 * 1000);
 
 app.post('/login', async (req, res) => {
+  const debugPrefix = `[${new Date().toISOString()}] [Login]`;
   const { username, password } = req.body;
   try {
+    console.log(`${debugPrefix} Attempting login for username: ${username}`);
     const user = await User.findOne({ username });
-    if (!user || !await bcrypt.compare(password, user.password)) {
+    if (!user) {
+      console.warn(`${debugPrefix} User not found: ${username}`);
       return res.status(401).json({ message: 'Invalid credentials' });
     }
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      console.warn(`${debugPrefix} Invalid password for username: ${username}`);
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+    console.log(`${debugPrefix} Generating JWT for userId: ${user._id}`);
     const token = jwt.sign({ userId: user._id, isAdmin: user.isAdmin }, secretKey, { expiresIn: '1h' });
+    console.log(`${debugPrefix} Login successful for username: ${username}`);
     res.json({ userId: user._id, token, isAdmin: user.isAdmin });
   } catch (err) {
-    console.error('Login error:', err);
+    console.error(`${debugPrefix} Login error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 app.post('/api/tracking-started', async (req, res) => {
+  const debugPrefix = `[${new Date().toISOString()}] [TrackingStarted]`;
   const { userId, timestamp } = req.body;
   try {
+    console.log(`${debugPrefix} Processing tracking started for userId: ${userId}`);
     const user = await User.findById(userId, '-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      console.warn(`${debugPrefix} User not found: ${userId}`);
+      return res.status(404).json({ message: 'User not found' });
+    }
     const userName = user.name || user.username || 'Unknown User';
+    console.log(`${debugPrefix} Sending tracking started notification for user: ${userName}`);
     const messagingResult = await safeFirestoreOperation(async () => {
       const adminMessage = {
         notification: {
@@ -299,9 +369,11 @@ app.post('/api/tracking-started', async (req, res) => {
         },
         topic: 'admin_notifications'
       };
+      console.log(`${debugPrefix} Sending Firebase message to admin_notifications`);
       return await admin.messaging().send(adminMessage);
     });
     if (messagingResult) {
+      console.log(`${debugPrefix} Notification sent successfully, messageId: ${messagingResult}`);
       res.status(200).json({
         success: true,
         message: 'Tracking started notification sent',
@@ -309,6 +381,7 @@ app.post('/api/tracking-started', async (req, res) => {
         messageId: messagingResult
       });
     } else {
+      console.warn(`${debugPrefix} Notification skipped - Firebase disabled`);
       res.status(200).json({
         success: true,
         message: 'Tracking started recorded, notification skipped (Firebase disabled)',
@@ -316,17 +389,20 @@ app.post('/api/tracking-started', async (req, res) => {
       });
     }
   } catch (err) {
-    console.error('Tracking started error:', err);
+    console.error(`${debugPrefix} Tracking started error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
 app.post('/api/notify-proximity', verifyToken, async (req, res) => {
+  const debugPrefix = `[${new Date().toISOString()}] [NotifyProximity]`;
   const { userId, userName, distanceToDestination, timestamp } = req.body;
   if (!userId || !distanceToDestination || !timestamp) {
+    console.warn(`${debugPrefix} Missing required fields: userId=${userId}, distanceToDestination=${distanceToDestination}, timestamp=${timestamp}`);
     return res.status(400).json({ message: 'userId, distanceToDestination, and timestamp are required' });
   }
   try {
+    console.log(`${debugPrefix} Processing proximity notification for userId: ${userId}, distance: ${distanceToDestination}`);
     const messagingResult = await safeFirestoreOperation(async () => {
       const message = {
         notification: {
@@ -341,25 +417,34 @@ app.post('/api/notify-proximity', verifyToken, async (req, res) => {
         },
         topic: 'admin_notifications'
       };
+      console.log(`${debugPrefix} Sending proximity notification to admin_notifications`);
       return await admin.messaging().send(message);
     });
     if (messagingResult) {
+      console.log(`${debugPrefix} Proximity notification sent successfully, messageId: ${messagingResult}`);
       res.status(200).json({ message: 'Proximity notification sent successfully', messageId: messagingResult });
     } else {
+      console.warn(`${debugPrefix} Proximity notification skipped - Firebase disabled`);
       res.status(200).json({ message: 'Proximity recorded, notification skipped (Firebase disabled)' });
     }
   } catch (err) {
-    console.error('Proximity notification error:', err);
+    console.error(`${debugPrefix} Proximity notification error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
 app.post('/api/tracking-stopped', async (req, res) => {
+  const debugPrefix = `[${new Date().toISOString()}] [TrackingStopped]`;
   const { userId, timestamp } = req.body;
   try {
+    console.log(`${debugPrefix} Processing tracking stopped for userId: ${userId}`);
     const user = await User.findById(userId, '-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      console.warn(`${debugPrefix} User not found: ${userId}`);
+      return res.status(404).json({ message: 'User not found' });
+    }
     const userName = user.name || user.username || 'Unknown User';
+    console.log(`${debugPrefix} Sending tracking stopped notification for user: ${userName}`);
     const messagingResult = await safeFirestoreOperation(async () => {
       const adminMessage = {
         notification: {
@@ -374,9 +459,11 @@ app.post('/api/tracking-stopped', async (req, res) => {
         },
         topic: 'admin_notifications'
       };
+      console.log(`${debugPrefix} Sending Firebase message to admin_notifications`);
       return await admin.messaging().send(adminMessage);
     });
     if (messagingResult) {
+      console.log(`${debugPrefix} Notification sent successfully, messageId: ${messagingResult}`);
       res.status(200).json({
         success: true,
         message: 'Tracking stopped notification sent',
@@ -384,6 +471,7 @@ app.post('/api/tracking-stopped', async (req, res) => {
         messageId: messagingResult
       });
     } else {
+      console.warn(`${debugPrefix} Notification skipped - Firebase disabled`);
       res.status(200).json({
         success: true,
         message: 'Tracking stopped recorded, notification skipped (Firebase disabled)',
@@ -391,25 +479,36 @@ app.post('/api/tracking-stopped', async (req, res) => {
       });
     }
   } catch (err) {
-    console.error('Tracking stopped error:', err);
+    console.error(`${debugPrefix} Tracking stopped error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
 app.get('/users', verifyToken, async (req, res) => {
-  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  const debugPrefix = `[${new Date().toISOString()}] [GetUsers]`;
+  if (!req.isAdmin) {
+    console.warn(`${debugPrefix} Admin access required, userId: ${req.userId}`);
+    return res.status(403).json({ message: 'Admin access required' });
+  }
   try {
+    console.log(`${debugPrefix} Fetching all users`);
     const users = await User.find({}, '-password');
+    console.log(`${debugPrefix} Retrieved ${users.length} users`);
     res.json(users);
   } catch (err) {
-    console.error('Get users error:', err);
+    console.error(`${debugPrefix} Get users error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 app.get('/users/status', verifyToken, async (req, res) => {
-  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  const debugPrefix = `[${new Date().toISOString()}] [GetUserStatus]`;
+  if (!req.isAdmin) {
+    console.warn(`${debugPrefix} Admin access required, userId: ${req.userId}`);
+    return res.status(403).json({ message: 'Admin access required' });
+  }
   try {
+    console.log(`${debugPrefix} Fetching user statuses`);
     const users = await User.find({}, '-password');
     const locations = await Location.aggregate([
       { $sort: { userId: 1, timestamp: -1 } },
@@ -423,6 +522,7 @@ app.get('/users/status', verifyToken, async (req, res) => {
       }
     ]);
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    console.log(`${debugPrefix} Processing ${users.length} users with ${locations.length} location records`);
     const userStatuses = users.map(user => {
       const location = locations.find(loc => loc.userId === user._id.toString());
       const status = location && location.timestamp >= fiveMinutesAgo ? location.appStatus : 'offline';
@@ -437,38 +537,52 @@ app.get('/users/status', verifyToken, async (req, res) => {
         isSendingLocation: !!location && location.timestamp >= fiveMinutesAgo
       };
     });
+    console.log(`${debugPrefix} Returning ${userStatuses.length} user statuses`);
     res.json(userStatuses);
   } catch (err) {
-    console.error('Get user statuses error:', err);
+    console.error(`${debugPrefix} Get user statuses error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 app.post('/users', verifyToken, async (req, res) => {
-  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  const debugPrefix = `[${new Date().toISOString()}] [CreateUser]`;
+  if (!req.isAdmin) {
+    console.warn(`${debugPrefix} Admin access required, userId: ${req.userId}`);
+    return res.status(403).json({ message: 'Admin access required' });
+  }
   try {
     const { username, password, name, email, number } = req.body;
+    console.log(`${debugPrefix} Creating user with username: ${username}`);
     if (!username || !password || !name || !email || !number) {
+      console.warn(`${debugPrefix} Missing required fields`);
       return res.status(400).json({ message: 'All fields are required' });
     }
     const existingUser = await User.findOne({ $or: [{ username }, { email }, { number }] });
     if (existingUser) {
+      console.warn(`${debugPrefix} User already exists: username=${username}, email=${email}, number=${number}`);
       return res.status(400).json({ message: 'Username, email, or number already exists' });
     }
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new User({ username, password: hashedPassword, name, email, number });
     await user.save();
+    console.log(`${debugPrefix} User created successfully: ${username}`);
     res.status(201).json({ message: 'User created' });
   } catch (err) {
-    console.error('Add user error:', err);
+    console.error(`${debugPrefix} Add user error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 app.put('/users/:userId', verifyToken, async (req, res) => {
-  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  const debugPrefix = `[${new Date().toISOString()}] [UpdateUser]`;
+  if (!req.isAdmin) {
+    console.warn(`${debugPrefix} Admin access required, userId: ${req.userId}`);
+    return res.status(403).json({ message: 'Admin access required' });
+  }
   try {
     const { username, password, name, email, number } = req.body;
+    console.log(`${debugPrefix} Updating user: ${req.params.userId}`);
     const updateData = { username, name, email, number };
     if (password) updateData.password = await bcrypt.hash(password, 10);
     const existingUser = await User.findOne({
@@ -476,52 +590,76 @@ app.put('/users/:userId', verifyToken, async (req, res) => {
       _id: { $ne: req.params.userId }
     });
     if (existingUser) {
+      console.warn(`${debugPrefix} Username, email, or number already exists: ${username}, ${email}, ${number}`);
       return res.status(400).json({ message: 'Username, email, or number already exists' });
     }
     const updatedUser = await User.findByIdAndUpdate(req.params.userId, updateData, { new: true });
     if (!updatedUser) {
+      console.warn(`${debugPrefix} User not found: ${req.params.userId}`);
       return res.status(404).json({ message: 'User not found' });
     }
+    console.log(`${debugPrefix} User updated successfully: ${req.params.userId}`);
     res.json({ message: 'User updated' });
   } catch (err) {
-    console.error('Update user error:', err);
+    console.error(`${debugPrefix} Update user error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 app.delete('/users/:userId', verifyToken, async (req, res) => {
-  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  const debugPrefix = `[${new Date().toISOString()}] [DeleteUser]`;
+  if (!req.isAdmin) {
+    console.warn(`${debugPrefix} Admin access required, userId: ${req.userId}`);
+    return res.status(403).json({ message: 'Admin access required' });
+  }
   try {
+    console.log(`${debugPrefix} Deleting user: ${req.params.userId}`);
     const user = await User.findByIdAndDelete(req.params.userId);
     if (!user) {
+      console.warn(`${debugPrefix} User not found: ${req.params.userId}`);
       return res.status(404).json({ message: 'User not found' });
     }
     await Destination.deleteMany({ userId: req.params.userId });
     await Location.deleteMany({ userId: req.params.userId });
     await History.deleteMany({ userId: req.params.userId });
+    console.log(`${debugPrefix} User and associated data deleted: ${req.params.userId}`);
     res.json({ message: 'User and associated data deleted' });
   } catch (err) {
-    console.error('Delete user error:', err);
+    console.error(`${debugPrefix} Delete user error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 app.post('/destination', verifyToken, async (req, res) => {
-  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  const debugPrefix = `[${new Date().toISOString()}] [AssignDestination]`;
+  if (!req.isAdmin) {
+    console.warn(`${debugPrefix} Admin access required, userId: ${req.userId}`);
+    return res.status(403).json({ message: 'Admin access required' });
+  }
   try {
     const { userId, latitude, longitude, date } = req.body;
+    console.log(`${debugPrefix} Assigning destination for userId: ${userId}`);
     if (!userId || !latitude || !longitude || !date) {
+      console.warn(`${debugPrefix} Missing required fields: userId=${userId}, latitude=${latitude}, longitude=${longitude}, date=${date}`);
       return res.status(400).json({ message: 'userId, latitude, longitude, and date are required' });
     }
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      console.warn(`${debugPrefix} User not found: ${userId}`);
+      return res.status(404).json({ message: 'User not found' });
+    }
     const formattedDate = new Date(date).toISOString().split('T')[0];
-    if (!formattedDate) return res.status(400).json({ message: 'Invalid date format' });
+    if (!formattedDate) {
+      console.warn(`${debugPrefix} Invalid date format: ${date}`);
+      return res.status(400).json({ message: 'Invalid date format' });
+    }
+    console.log(`${debugPrefix} Updating/inserting destination for date: ${formattedDate}`);
     const destination = await Destination.findOneAndUpdate(
       { userId, date: formattedDate },
       { latitude, longitude, date: formattedDate },
       { new: true, upsert: true }
     );
+    console.log(`${debugPrefix} Sending destination notification for userId: ${userId}`);
     const messagingResult = await safeFirestoreOperation(async () => {
       const adminMessage = {
         notification: {
@@ -536,24 +674,32 @@ app.post('/destination', verifyToken, async (req, res) => {
         },
         topic: `destination_${userId}`
       };
+      console.log(`${debugPrefix} Sending Firebase message to destination_${userId}`);
       return await admin.messaging().send(adminMessage);
     });
     const message = destination.isNew ? 'Destination assigned' : 'Destination updated';
+    console.log(`${debugPrefix} ${message} for userId: ${userId}, notificationSent: ${!!messagingResult}`);
     res.status(201).json({
       message,
       destination: { userId, latitude, longitude, date: formattedDate },
       notificationSent: !!messagingResult
     });
   } catch (err) {
-    console.error('Assign destination error:', err);
+    console.error(`${debugPrefix} Assign destination error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
 app.get('/destination/:userId', verifyToken, async (req, res) => {
+  const debugPrefix = `[${new Date().toISOString()}] [GetDestination]`;
   try {
+    console.log(`${debugPrefix} Fetching destination for userId: ${req.params.userId}`);
     const destination = await Destination.findOne({ userId: req.params.userId });
-    if (!destination) return res.status(404).json({ message: 'No destination found' });
+    if (!destination) {
+      console.warn(`${debugPrefix} No destination found for userId: ${req.params.userId}`);
+      return res.status(404).json({ message: 'No destination found' });
+    }
+    console.log(`${debugPrefix} Destination found for userId: ${req.params.userId}`);
     res.json({
       userId: destination.userId,
       latitude: destination.latitude,
@@ -561,28 +707,43 @@ app.get('/destination/:userId', verifyToken, async (req, res) => {
       date: destination.date
     });
   } catch (err) {
-    console.error('Get destination error:', err);
+    console.error(`${debugPrefix} Get destination error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 app.delete('/destination/:userId', verifyToken, async (req, res) => {
-  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  const debugPrefix = `[${new Date().toISOString()}] [DeleteDestination]`;
+  if (!req.isAdmin) {
+    console.warn(`${debugPrefix} Admin access required, userId: ${req.userId}`);
+    return res.status(403).json({ message: 'Admin access required' });
+  }
   try {
+    console.log(`${debugPrefix} Deleting destination for userId: ${req.params.userId}`);
     const destination = await Destination.findOneAndDelete({ userId: req.params.userId });
-    if (!destination) return res.status(404).json({ message: 'No destination found' });
+    if (!destination) {
+      console.warn(`${debugPrefix} No destination found for userId: ${req.params.userId}`);
+      return res.status(404).json({ message: 'No destination found' });
+    }
+    console.log(`${debugPrefix} Destination deleted for userId: ${req.params.userId}`);
     res.json({ message: 'Destination deleted' });
   } catch (err) {
-    console.error('Delete destination error:', err);
+    console.error(`${debugPrefix} Delete destination error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 app.get('/tracking/:userId', verifyToken, async (req, res) => {
+  const debugPrefix = `[${new Date().toISOString()}] [GetTracking]`;
   try {
+    console.log(`${debugPrefix} Fetching tracking data for userId: ${req.params.userId}`);
     const locations = await Location.find({ userId: req.params.userId }).sort({ timestamp: -1 }).limit(1);
-    if (!locations.length) return res.status(404).json({ message: 'No tracking data found' });
+    if (!locations.length) {
+      console.warn(`${debugPrefix} No tracking data found for userId: ${req.params.userId}`);
+      return res.status(404).json({ message: 'No tracking data found' });
+    }
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    console.log(`${debugPrefix} Tracking data found for userId: ${req.params.userId}`);
     res.json({
       userId: locations[0].userId,
       latitude: locations[0].latitude,
@@ -593,14 +754,19 @@ app.get('/tracking/:userId', verifyToken, async (req, res) => {
       timestamp: locations[0].timestamp
     });
   } catch (err) {
-    console.error('Get tracking data error:', err);
+    console.error(`${debugPrefix} Get tracking data error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 app.get('/locations', verifyToken, async (req, res) => {
-  if (!req.isAdmin) return res.status(403).json({ message: 'Admin access required' });
+  const debugPrefix = `[${new Date().toISOString()}] [GetLocations]`;
+  if (!req.isAdmin) {
+    console.warn(`${debugPrefix} Admin access required, userId: ${req.userId}`);
+    return res.status(403).json({ message: 'Admin access required' });
+  }
   try {
+    console.log(`${debugPrefix} Fetching all locations`);
     const locations = await Location.aggregate([
       { $sort: { userId: 1, timestamp: -1 } },
       {
@@ -616,6 +782,7 @@ app.get('/locations', verifyToken, async (req, res) => {
       }
     ]);
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    console.log(`${debugPrefix} Retrieved ${locations.length} location records`);
     res.json(locations.map(loc => ({
       userId: loc.userId,
       latitude: loc.latitude,
@@ -626,29 +793,38 @@ app.get('/locations', verifyToken, async (req, res) => {
       timestamp: loc.timestamp
     })));
   } catch (err) {
-    console.error('Get locations error:', err);
+    console.error(`${debugPrefix} Get locations error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 app.get('/history/:userId', verifyToken, async (req, res) => {
+  const debugPrefix = `[${new Date().toISOString()}] [GetHistory]`;
   try {
+    console.log(`${debugPrefix} Fetching history for userId: ${req.params.userId}`);
     const history = await History.find({ userId: req.params.userId }).sort({ date: -1 });
+    console.log(`${debugPrefix} Retrieved ${history.length} history records for userId: ${req.params.userId}`);
     res.json(history);
   } catch (err) {
-    console.error('Get history error:', err);
+    console.error(`${debugPrefix} Get history error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 app.post('/location', verifyToken, async (req, res) => {
+  const debugPrefix = `[${new Date().toISOString()}] [SaveLocation]`;
   try {
     const { userId, latitude, longitude, speed, timestamp, startLatitude, startLongitude, isStartLocation, appStatus } = req.body;
+    console.log(`${debugPrefix} Saving location for userId: ${userId}`);
     if (!userId || !latitude || !longitude) {
+      console.warn(`${debugPrefix} Missing required fields: userId=${userId}, latitude=${latitude}, longitude=${longitude}`);
       return res.status(400).json({ message: 'userId, latitude, and longitude are required' });
     }
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) {
+      console.warn(`${debugPrefix} User not found: ${userId}`);
+      return res.status(404).json({ message: 'User not found' });
+    }
     const locationData = {
       userId,
       latitude,
@@ -657,12 +833,14 @@ app.post('/location', verifyToken, async (req, res) => {
       appStatus: appStatus,
       timestamp: timestamp ? new Date(timestamp) : Date.now()
     };
+    console.log(`${debugPrefix} Updating/inserting location data`);
     await Location.findOneAndUpdate(
       { userId },
       locationData,
       { upsert: true, new: true }
     );
     const date = new Date(timestamp || Date.now()).toISOString().split('T')[0];
+    console.log(`${debugPrefix} Fetching locations for date: ${date}`);
     const locations = await Location.find({
       userId,
       timestamp: { $gte: new Date(date) }
@@ -687,19 +865,23 @@ app.post('/location', verifyToken, async (req, res) => {
       historyData.distance = calculateDistance(historyData.path);
       historyData.timeTaken = calculateTimeTaken(locations);
     }
+    console.log(`${debugPrefix} Updating/inserting history data for date: ${date}`);
     await History.findOneAndUpdate(
       { userId, date },
       historyData,
       { upsert: true, new: true }
     );
+    console.log(`${debugPrefix} Location saved successfully for userId: ${userId}`);
     res.status(201).json({ message: 'Location saved' });
   } catch (err) {
-    console.error('Send location error:', err);
+    console.error(`${debugPrefix} Send location error: ${err.message}, stack: ${err.stack}`);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
 function calculateDistance(locations) {
+  const debugPrefix = `[${new Date().toISOString()}] [CalculateDistance]`;
+  console.log(`${debugPrefix} Calculating distance for ${locations.length} locations`);
   let totalDistance = 0;
   for (let i = 1; i < locations.length; i++) {
     const lat1 = locations[i - 1].latitude;
@@ -717,29 +899,41 @@ function calculateDistance(locations) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     totalDistance += R * c / 1000;
   }
-  return Number(totalDistance.toFixed(2));
+  const result = Number(totalDistance.toFixed(2));
+  console.log(`${debugPrefix} Calculated distance: ${result} km`);
+  return result;
 }
 
 function calculateTimeTaken(locations) {
-  if (locations.length < 2) return '0.00 minutes';
+  const debugPrefix = `[${new Date().toISOString()}] [CalculateTimeTaken]`;
+  if (locations.length < 2) {
+    console.log(`${debugPrefix} Less than 2 locations, returning 0.00 minutes`);
+    return '0.00 minutes';
+  }
   const start = new Date(locations[0].timestamp);
   const end = new Date(locations[locations.length - 1].timestamp);
   const diff = (end - start) / 1000 / 60;
-  return `${diff.toFixed(2)} minutes`;
+  const result = `${diff.toFixed(2)} minutes`;
+  console.log(`${debugPrefix} Calculated time taken: ${result}`);
+  return result;
 }
 
 async function startServer() {
+  const debugPrefix = `[${new Date().toISOString()}] [StartServer]`;
   try {
+    console.log(`${debugPrefix} Starting server initialization`);
     await startFirebase();
+    console.log(`${debugPrefix} Scheduling daily destination reminders at 8 AM IST`);
     const dailyJob = new CronJob('0 0 8 * * *', async () => {
+      console.log(`${debugPrefix} Running scheduled daily destination notifications`);
       await sendDailyDestinationNotifications();
     }, null, true, 'Asia/Kolkata');
-    console.log('⏰ Daily destination reminder scheduled at 8 AM IST');
+    console.log(`${debugPrefix} Daily destination reminder scheduled`);
     app.listen(port, () => {
-      console.log(`🚀 Server running on port ${port}`);
+      console.log(`${debugPrefix} Server running on port ${port}`);
     });
   } catch (error) {
-    console.error('💥 Failed to start server:', error);
+    console.error(`${debugPrefix} Failed to start server: ${error.message}, stack: ${error.stack}`);
     process.exit(1);
   }
 }

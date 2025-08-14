@@ -7,53 +7,59 @@ const admin = require('firebase-admin');
 const { CronJob } = require('cron');
 require('dotenv').config();
 const axios = require('axios');
+const { initializeApp, applicationDefault, getApp } = require('firebase-admin/app');
+const { getMessaging } = require('firebase-admin/messaging');
 const keepAliveUrl = 'https://trainer-backend-soj9.onrender.com/ping';
 const app = express();
 app.use(cors());
 app.use(express.json());
 const port = process.env.PORT || 3000;
 const secretKey = process.env.JWT_SECRET || 'tamil';
-
-const serviceAccount ={
-  "type": "service_account",
-  "project_id": "trainertrack-e6238",
-  "private_key_id": "54f495ccf252380a0fcb87397cba901bec889db1",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCpsctAct58x17Q\nWp4+m9Z570Ec5fagDo2mbzb8eZC+IT5kYd2dQ1KfmdIm7mRzUjxIW1EUA2TXzop7\n6upeq2Yf0JqNTN4UmT9Zz0ha0JkIXShmdP8hTxlmAe9WaVT/sfKAhbzary/zwFYc\nymaT3NmVijMnOSOv/vTmzHcgA8qUWEX0QyrHOP5m5ObLqF6+CVKFCXxlp7bcZhkp\nQkUIIQHlMs1IPUNjB2OyjGfqFPu4419887Cg4s/oLlmtCtQ3vGKB7HzZPofWDbQB\nIvEIlSU5iYOsfCOFGyIYJCe48KWSeGXCpmKp2I+fLOWQrqC4FFLp2XO7gRU5/O6i\nSu6jME4vAgMBAAECggEAE/mEBaEVLrY/zeIXeyKC5jV916CmHYRjs3H8lKQxSoAa\nmlxUEX0+44ngDTRwieE7NqqGalxVPtCRcoazcdNWdmuVVbP09uhsZu5EWRRG1I+K\nquIeCgCylP79+jufMBNKiqBeG5Zq3D6z+Y2a8iVuo0XyQYKzVbXQLr67TanElcjL\nwHxO+14wRorkHvgrxcYCuchPebdMwFYdNpbUqEolmgkIKLfB3qWmdWFxYlQgs+Ok\nKtT76bBEHoKAbKBYI8foSUzhz3lmkzyxGHJ0xO8MX3p5SfahCXg8WgU5qwdeHFbX\n7M/HdLF77qIC6/2WPAehYLXHXZokGaydBQlkRiCE8QKBgQDeDe2aN12nMBn5navk\nbEUW/FvosD/uN/NqiHJLHurxhyM2fkdLKbokoc2AyItvEPqxgihUOIpfKiKM0FwT\nf4+DJJggR0o9Guc9WgkLBB4HNq/EW3yvgYIEh5BHJE6bl/Sp8IY5hDjrergFUjY/\nsMvihJDzSUKfm3+siniUlCk9iQKBgQDDosSCOcfF+71xQq8ZV/q0qns0ZoVnBjRP\nL9w/GQEJtpxPG0n2o8DCf8Cz4PyRSkhccITDSro7WuyQdgyV6BqYr0p1LnsWcYxU\nkTEcGJTaEzdCXxqtCJxtyVaHUM066f1vtLYgNzEGpIIZLaaTe3qoEZi36GjyM577\n+UchZ+G39wKBgQDd6X91qjUe+zRKQGdjfUxCn2rejR0m3aWW5suKBVj4jXwEXoiz\nNf0/1K/CLykhkw9mTFQvbt3iIwKqRSRvnAB5KB4bzAMGNBe6OXtmFfRIcz+O9XsT\nDlM4YZ4varpgRqkNGEGbw2b69gZn0vRCDFaFhsQxThqV1VnvveapXbQlOQKBgQC8\na7f39M6D0MHUo/Ug46uC9e9TuKojX8ZhvibSXrKxOD+zsQS7l1u/+GsQ1FBtXq3y\n2iwEK6TSJfBR8mCMwM9c3vdHhUzngNU3Xd9+v+4dWwSN2CtJHFINKy07hocjhtmh\nDNuci4ucajUjKuSUhwjLdqcv+ZeaLj2hUaVAd1zeYQKBgDbXqT5M793oxma94dA0\no4qoSwS2I//H06R1HJwh6g1+26IYoncHzuJBDVRhKDI0Ka7R06gPlFcVRs8VXFKn\nLMWJbhcDB1TXfO0oCLCglPm51v2P6wmIRQ9fN+eY3I4IUIFTUxgii8sngYjxdrJR\nOW3BTYWWZiMO/owD5KlQJ0q9\n-----END PRIVATE KEY-----\n",
-  "client_email": "firebase-adminsdk-fbsvc@trainertrack-e6238.iam.gserviceaccount.com",
-  "client_id": "103781155809937938716",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40trainertrack-e6238.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-};
+const projectId = process.env.GOOGLE_CLOUD_PROJECT || 'trainertrack-e6238';
 
 let initTime = Date.now();
 global.FIREBASE_DISABLED = false;
 
-async function syncSystemTime() {
+async function syncSystemTime(maxRetries = 3) {
   const debugPrefix = `[${new Date().toISOString()}] [SyncSystemTime]`;
-  try {
-    console.log(`${debugPrefix} Starting time sync with worldtimeapi.org`);
-    const response = await fetch('http://worldtimeapi.org/api/timezone/Etc/UTC');
-    const timeData = await response.json();
-    const correctTime = new Date(timeData.datetime);
-    const systemTime = new Date();
-    const timeDiff = Math.abs(correctTime.getTime() - systemTime.getTime());
-    console.log(`${debugPrefix} Time sync successful: difference=${timeDiff}ms, correctTime=${correctTime}, systemTime=${systemTime}`);
-    if (timeDiff > 30000) {
-      console.warn(`${debugPrefix} Significant time drift detected: ${timeDiff}ms`);
+  const timeApis = [
+    'http://worldtimeapi.org/api/timezone/Etc/UTC',
+    'https://time.google.com',
+    'http://api.timezonedb.com/v2.1/get-time?key=92A1NWPV4QG5&format=json&by=zone&zone=Etc/UTC'
+  ];
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    for (const api of timeApis) {
+      try {
+        console.log(`${debugPrefix} Attempt ${attempt}/${maxRetries} with ${api}`);
+        const response = await fetch(api);
+        if (!response.ok) {
+          throw new Error(`HTTP error: ${response.status}`);
+        }
+        const timeData = await response.json();
+        const correctTime = new Date(timeData.datetime || timeData.utc_datetime);
+        const systemTime = new Date();
+        const timeDiff = Math.abs(correctTime.getTime() - systemTime.getTime());
+        console.log(`${debugPrefix} Time sync successful: difference=${timeDiff}ms, correctTime=${correctTime}, systemTime=${systemTime}`);
+        if (timeDiff > 30000) {
+          console.warn(`${debugPrefix} Significant time drift detected: ${timeDiff}ms`);
+        }
+        return { timeDiff, correctTime, systemTime };
+      } catch (error) {
+        console.error(`${debugPrefix} Time sync failed with ${api}: ${error.message}, stack: ${error.stack}`);
+        if (attempt === maxRetries && api === timeApis[timeApis.length - 1]) {
+          console.error(`${debugPrefix} All time sync attempts failed`);
+          return null;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
     }
-    return { timeDiff, correctTime, systemTime };
-  } catch (error) {
-    console.error(`${debugPrefix} Time sync failed: ${error.message}, stack: ${error.stack}`);
-    return null;
   }
 }
 
 async function initializeFirebaseWithRetry(maxRetries = 3) {
   const debugPrefix = `[${new Date().toISOString()}] [InitializeFirebase]`;
-  console.log(`${debugPrefix} Starting Firebase initialization`);
+  console.log(`${debugPrefix} Starting Firebase initialization with ADC`);
   await syncSystemTime();
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -62,23 +68,39 @@ async function initializeFirebaseWithRetry(maxRetries = 3) {
         console.log(`${debugPrefix} Deleting existing Firebase app: ${app.name}`);
         app.delete();
       });
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
+      const defaultApp = initializeApp({
+        credential: applicationDefault(),
+        projectId: projectId
       });
       console.log(`${debugPrefix} Fetching Firebase access token`);
-      await Promise.race([
-        admin.app().options.credential.getAccessToken(),
+      const token = await Promise.race([
+        defaultApp.options.credential.getAccessToken(),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Token fetch timeout')), 10000))
       ]);
-      console.log(`${debugPrefix} Firebase Admin initialized successfully`);
+      console.log(`${debugPrefix} Firebase Admin initialized successfully for app ${defaultApp.name}, token: ${token.access_token.substring(0, 10)}...`);
       initTime = Date.now();
       global.FIREBASE_DISABLED = false;
       return true;
     } catch (error) {
       console.error(`${debugPrefix} Firebase init attempt ${i + 1} failed: ${error.message}, stack: ${error.stack}`);
+      if (error.message.includes('invalid_grant')) {
+        console.warn(`${debugPrefix} Invalid JWT Signature detected, check GOOGLE_APPLICATION_CREDENTIALS and system time`);
+        console.log(`${debugPrefix} Environment: GOOGLE_CLOUD_PROJECT=${process.env.GOOGLE_CLOUD_PROJECT}, GOOGLE_APPLICATION_CREDENTIALS=${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
+      }
       if (i === maxRetries - 1) {
         console.warn(`${debugPrefix} Disabling Firebase due to repeated failures`);
         global.FIREBASE_DISABLED = true;
+        console.error(`${debugPrefix} CRITICAL: Firebase initialization failed after ${maxRetries} attempts`);
+        try {
+          await axios.post('https://your-logging-service.com/alert', {
+            message: 'Firebase initialization failed',
+            error: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString()
+          });
+        } catch (alertError) {
+          console.error(`${debugPrefix} Failed to send alert: ${alertError.message}`);
+        }
         return false;
       }
       console.log(`${debugPrefix} Waiting ${2000 * (i + 1)}ms before retry`);
@@ -95,7 +117,8 @@ async function ensureFreshFirebaseToken() {
   }
   try {
     console.log(`${debugPrefix} Attempting to refresh Firebase token`);
-    await admin.app().options.credential.getAccessToken(true);
+    const defaultApp = getApp();
+    await defaultApp.options.credential.getAccessToken(true);
     console.log(`${debugPrefix} Token refreshed successfully`);
     return true;
   } catch (error) {
@@ -160,6 +183,7 @@ process.on('unhandledRejection', async (error) => {
   const debugPrefix = `[${new Date().toISOString()}] [UnhandledRejection]`;
   if (error.message?.includes('invalid_grant')) {
     console.error(`${debugPrefix} JWT signature error detected: ${error.message}, stack: ${error.stack}`);
+    console.log(`${debugPrefix} Environment: GOOGLE_CLOUD_PROJECT=${process.env.GOOGLE_CLOUD_PROJECT}, GOOGLE_APPLICATION_CREDENTIALS=${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
     global.FIREBASE_DISABLED = true;
     await initializeFirebaseWithRetry();
   } else {
@@ -219,7 +243,7 @@ async function sendDailyDestinationNotifications() {
             topic: `user_${userId}`
           };
           console.log(`${debugPrefix} Sending notification to user_${userId}`);
-          return await admin.messaging().send(message);
+          return await getMessaging().send(message);
         });
         if (messagingResult) {
           console.log(`${debugPrefix} Reminder sent successfully to user_${userId}: ${messagingResult}`);
@@ -306,7 +330,6 @@ app.get('/ping', (req, res) => {
   res.status(200).send('Alive');
 });
 
-// Add keep-alive self-ping every 14 minutes
 setInterval(async () => {
   const debugPrefix = `[${new Date().toISOString()}] [KeepAlive]`;
   try {
@@ -370,7 +393,7 @@ app.post('/api/tracking-started', async (req, res) => {
         topic: 'admin_notifications'
       };
       console.log(`${debugPrefix} Sending Firebase message to admin_notifications`);
-      return await admin.messaging().send(adminMessage);
+      return await getMessaging().send(adminMessage);
     });
     if (messagingResult) {
       console.log(`${debugPrefix} Notification sent successfully, messageId: ${messagingResult}`);
@@ -418,7 +441,7 @@ app.post('/api/notify-proximity', verifyToken, async (req, res) => {
         topic: 'admin_notifications'
       };
       console.log(`${debugPrefix} Sending proximity notification to admin_notifications`);
-      return await admin.messaging().send(message);
+      return await getMessaging().send(message);
     });
     if (messagingResult) {
       console.log(`${debugPrefix} Proximity notification sent successfully, messageId: ${messagingResult}`);
@@ -460,7 +483,7 @@ app.post('/api/tracking-stopped', async (req, res) => {
         topic: 'admin_notifications'
       };
       console.log(`${debugPrefix} Sending Firebase message to admin_notifications`);
-      return await admin.messaging().send(adminMessage);
+      return await getMessaging().send(adminMessage);
     });
     if (messagingResult) {
       console.log(`${debugPrefix} Notification sent successfully, messageId: ${messagingResult}`);
@@ -675,7 +698,7 @@ app.post('/destination', verifyToken, async (req, res) => {
         topic: `destination_${userId}`
       };
       console.log(`${debugPrefix} Sending Firebase message to destination_${userId}`);
-      return await admin.messaging().send(adminMessage);
+      return await getMessaging().send(adminMessage);
     });
     const message = destination.isNew ? 'Destination assigned' : 'Destination updated';
     console.log(`${debugPrefix} ${message} for userId: ${userId}, notificationSent: ${!!messagingResult}`);
